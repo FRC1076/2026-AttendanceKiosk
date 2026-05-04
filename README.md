@@ -1,4 +1,10 @@
-The way to use this is very simple and kinda annoying.
-Step 1.) Turn on the Pi, if it's plugged in and not on, unplug it and plug it back in
-Step 2.) You will need a monitor, keyboard, and mouse to start up the program, the mouse might be optional but I wouldn't push it
-Step 3.) Go to the terminal and type sudo -E python3 -u ~/QR_reader/code.py, now you can unplug the monitor, keyboard, and mouse
+This is everything that would be needed for the QR reader to be setup, run, and maintain the QR login system for all future seasons.
+Included:
+The list of QR codes for the 2026 season
+The python code that the pi will run
+Instructions on how to start the system for a build
+
+Next steps:
+Simplifing the starting sequence
+Design a PCB so a breadboard is not being used
+Make a better case that would house said PCB
