@@ -17,3 +17,5 @@ Simplifing the starting sequence
 Design a PCB so a breadboard is not being used
 
 Make a better case that would house said PCB
+
+Have a system up so that the status can be remotely altered, i.e. turn it on and off without needing to be there
