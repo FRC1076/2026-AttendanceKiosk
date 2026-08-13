@@ -1,4 +1,4 @@
-# 2026 Attendance Kiosk
+# FRC1076 Attendance Kiosk
 
 A Raspberry Pi QR-code kiosk that logs build-season attendance for FRC Team 1076
 (PiHi Samurai). A team member holds their printed badge up to the camera; the Pi
