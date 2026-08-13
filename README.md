@@ -35,7 +35,6 @@ today. See [Planned: LED status strip](#planned-led-status-strip).
 | [code.py](code.py) | The entire kiosk program — one file, one `while True` loop. Runs on the Pi. |
 | [generate_badges.py](generate_badges.py) | Mints badge IDs into the roster sheet and renders printable PNGs into a local, gitignored `badges/`. Run on any machine with the service-account key. |
 | [Use instructions](Use%20instructions) | Step-by-step operating procedure for starting and stopping the kiosk at a build session. |
-| [PihiQRcodes_ready.zip](PihiQRcodes_ready.zip) | **Superseded — pending removal.** The 2026 name-encoding badge set. Each PNG decodes to `Name,Subteam`, so the archive is student data and should be purged from git history. |
 | [docs/led-strip-wiring.md](docs/led-strip-wiring.md) | **Plan, not yet built.** Full wiring plan for the WS2812B status strip: pin choice and why, parts, power budget, `config.txt` changes, and a bring-up checklist. |
 | [docs/led-strip-wiring.svg](docs/led-strip-wiring.svg) | The same plan as a labelled wiring diagram — every component and connection, new path in colour and existing kiosk wiring in grey. |
 
@@ -240,11 +239,17 @@ it off once everyone has been reprinted.
 
 ## Known issues
 
-- **The old badge zip is still in git history.** Removing the file in a new
-  commit is not enough — the blob remains reachable from commit `721c0c0`.
-  Purging it needs a history rewrite (`git filter-repo --path
-  PihiQRcodes_ready.zip --invert-paths`), a force-push, and a heads-up to anyone
-  holding a clone.
+- **The old badge zip was purged from git history on 2026-08-13.**
+  `PihiQRcodes_ready.zip` held the 2026 name-encoding badge set, where each PNG
+  decoded to `Name,Subteam` — student data. It was removed with `git
+  filter-repo --path PihiQRcodes_ready.zip --invert-paths` and force-pushed, so
+  every SHA from the old `721c0c0` onward was rewritten and that commit, which
+  contained only the zip, no longer exists. Two things this does **not** settle:
+  GitHub keeps the old objects fetchable by direct SHA URL until Support purges
+  the repo's cached views, so that request has to be made separately; and the
+  archive was public in an org repo before the rewrite, so this limits future
+  exposure rather than undoing past exposure. **Anyone holding a clone from
+  before the rewrite must re-clone** — pulling will drag the old history back in.
 - **`Elctrical` typo** in one subteam value. Now fixable in the roster sheet
   alone — subteams are resolved at scan time, so no badge needs reprinting.
 - **The roster is read once at startup**, so adding a person, or minting their
