@@ -1,0 +1,16 @@
+# Generated badges. The PNGs are captioned with student names so they can be
+# handed out -- they are student data and stay local. Regenerate with
+# generate_badges.py instead of committing them.
+badges/
+
+# Google service-account credentials.
+*.json
+service_account*.json
+
+# The old name-encoding badge set. Kept here so it cannot be re-added after
+# it is purged from history.
+PihiQRcodes_ready.zip
+PihiQRcodes/
+
+__pycache__/
+*.pyc
