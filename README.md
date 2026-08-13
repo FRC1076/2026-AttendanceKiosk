@@ -24,6 +24,10 @@ generator, and the instructions for starting the system at a build.
    accept chime or a single low reject tone. The loop then pauses ~15 seconds
    before accepting another scan.
 
+A third feedback channel — an addressable RGB strip, visible from across the
+shop — is planned but **not built**. Nothing in [code.py](code.py) drives one
+today. See [Planned: LED status strip](#planned-led-status-strip).
+
 ## Repository contents
 
 | Path | What it is |
@@ -32,6 +36,8 @@ generator, and the instructions for starting the system at a build.
 | [generate_badges.py](generate_badges.py) | Mints badge IDs into the roster sheet and renders printable PNGs into a local, gitignored `badges/`. Run on any machine with the service-account key. |
 | [Use instructions](Use%20instructions) | Step-by-step operating procedure for starting and stopping the kiosk at a build session. |
 | [PihiQRcodes_ready.zip](PihiQRcodes_ready.zip) | **Superseded — pending removal.** The 2026 name-encoding badge set. Each PNG decodes to `Name,Subteam`, so the archive is student data and should be purged from git history. |
+| [docs/led-strip-wiring.md](docs/led-strip-wiring.md) | **Plan, not yet built.** Full wiring plan for the WS2812B status strip: pin choice and why, parts, power budget, `config.txt` changes, and a bring-up checklist. |
+| [docs/led-strip-wiring.svg](docs/led-strip-wiring.svg) | The same plan as a labelled wiring diagram — every component and connection, new path in colour and existing kiosk wiring in grey. |
 
 ## Hardware
 
@@ -62,24 +68,85 @@ Two exceptions to "or newer" are worth knowing if the board is ever swapped:
 the **Pi 400** has no CSI camera port and cannot run this at all, and on a
 **Pi 5** `RPi.GPIO` does not work against the RP1 I/O controller, so `RPLCD`
 will not initialize until `rpi-lgpio` is installed as a drop-in replacement.
+The Pi 5 also rules out the planned LED strip outright — `rpi_ws281x` has no
+Pi 5 support at all, and there is no drop-in fix for that one.
 
 ### Pin assignments
 
 `RPLCD` is configured in BOARD numbering, `gpiozero` uses BCM. Both are in play
 at once.
 
-| Function | BOARD pin | BCM |
-| --- | --- | --- |
-| LCD RS | 19 | GPIO10 |
-| LCD E | 18 | GPIO24 |
-| LCD D4 | 16 | GPIO23 |
-| LCD D5 | 11 | GPIO17 |
-| LCD D6 | 12 | GPIO18 |
-| LCD D7 | 15 | GPIO22 |
-| Buzzer | 40 | GPIO21 |
+| Function | BOARD pin | BCM | Status |
+| --- | --- | --- | --- |
+| LCD RS | 19 | GPIO10 | wired |
+| LCD E | 18 | GPIO24 | wired |
+| LCD D4 | 16 | GPIO23 | wired |
+| LCD D5 | 11 | GPIO17 | wired |
+| LCD D6 | 12 | GPIO18 | wired |
+| LCD D7 | 15 | GPIO22 | wired |
+| Buzzer | 40 | GPIO21 | wired |
+| LED strip data | 32 | GPIO12 | **planned** |
+| LED strip ground | 34 | — | **planned** |
+| *(keep free — PWM1 backup for the strip)* | 33 | GPIO13 | reserved |
 
 No pins collide. LCD RS sits on GPIO10, which is SPI MOSI, so **SPI must stay
 disabled** in `raspi-config`.
+
+### Planned: LED status strip
+
+Not built. The full plan, with a diagram, is in
+[docs/led-strip-wiring.md](docs/led-strip-wiring.md) — this is the summary.
+
+An addressable strip would show scan results at a distance: amber ready, green
+logged, red unauthorized. **It needs no existing wire to move.**
+
+`rpi_ws281x` cannot bit-bang the WS2812B protocol from an arbitrary pin — it
+hands timing to one of three peripherals, and each is hard-wired to specific
+GPIOs. Three of the four routes are already taken by this kiosk:
+
+| Route | Pins it can use | Status here |
+| --- | --- | --- |
+| PWM0 | GPIO18 (pin 12), **GPIO12 (pin 32)** | GPIO18 is LCD D6. **GPIO12 is free** |
+| PWM1 | GPIO13 (pin 33), GPIO19 (pin 35) | free — the backup |
+| PCM | GPIO21 (pin 40) | buzzer |
+| SPI0 MOSI | GPIO10 (pin 19) | LCD RS, and SPI must stay disabled |
+
+GPIO12 is PWM0's primary pin and maps to library channel 0, the default path.
+Leave GPIO13 unpopulated so PWM1 stays available as a fallback.
+
+Extra parts, none of them optional:
+
+| Part | Requirement | Why |
+| --- | --- | --- |
+| Level shifter | **74AHCT125** (or any `HCT` buffer) | The Pi drives 3.3 V; WS2812B needs ≥3.5 V. Works on the bench, fails on a longer cable. An `HC` part will **not** do — `HCT` is the load-bearing part of the name |
+| Series resistor | 470 Ω, ¼ W | Damps the data line |
+| Bulk capacitor | 1000 µF, 10 V | Inrush at power-on otherwise resets the first LEDs |
+| 5 V supply | **Separate from the Pi's PSU** | 60 mA per LED at full white. 16 LEDs → 2 A, 30 LEDs → 3 A |
+
+Two rules that matter more than the parts list:
+
+- **Never power the strip from header pins 2/4.** They are unfused pass-through
+  from the Pi's own PSU. A strip pulling an amp through them does not just dim —
+  it sags the 5 V rail and corrupts the SD card.
+- **Tie the grounds together** — strip, supply, and Pi pin 34. The data signal
+  is referenced to that return.
+
+Config, software, and known traps:
+
+- `/boot/config.txt` needs `dtparam=audio=off`. The PWM block is shared with the
+  analog audio path; leaving audio on makes the LED timing jitter.
+- Do **not** add `dtoverlay=pwm`. `rpi_ws281x` drives the PWM peripheral
+  directly through `/dev/mem`, and the kernel overlay fights it.
+- Leave DMA at the library default, **10**. Tutorials that pass `dma=5` will
+  corrupt the SD card on a Pi 3.
+- It needs root, which [Use instructions](Use%20instructions) already provides
+  via `sudo -E`.
+- **Do not switch `gpiozero` to `PiGPIOFactory`.** It looks like a free upgrade
+  for cleaner buzzer tones, but `pigpiod` wants the same DMA and PWM hardware
+  and will break the strip. The default `RPi.GPIO` factory drives the buzzer
+  with *software* PWM, which is why the two coexist today.
+- Cap brightness in software (~60 of 255). It cuts current roughly fourfold and
+  stops the strip being blinding in a lit shop.
 
 ### Needed only to start and stop it
 
@@ -106,6 +173,10 @@ Kiosk ([code.py](code.py), runs on the Pi): `opencv-python` · `pyzbar` ·
 
 Badge generator ([generate_badges.py](generate_badges.py), runs anywhere):
 `gspread` · `google-auth` · `qrcode` · `Pillow`
+
+Planned, for the LED strip only: `rpi_ws281x` — prefer
+`sudo apt install python3-rpi-ws281x`, since Bookworm blocks system-wide `pip`
+and the kiosk runs against system packages.
 
 ## Operating it
 
@@ -193,3 +264,10 @@ it off once everyone has been reprinted.
 - Make a better case that would house said PCB
 - Have a system up so the status can be remotely altered — turn it on and off
   without needing to be there
+- **Add the LED status strip** — plan and diagram are done
+  ([docs/led-strip-wiring.md](docs/led-strip-wiring.md)); the parts and the
+  build are not. Roll the GPIO12 data line, the 74AHCT125, and the separate 5 V
+  input into the PCB design above rather than breadboarding it twice. When
+  wiring it into [code.py](code.py), set a static colour per scan result — an
+  inline animation would stack on the existing 15-second sleep and make the
+  sluggish `q` quit worse
