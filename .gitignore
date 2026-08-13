@@ -7,10 +7,13 @@ badges/
 *.json
 service_account*.json
 
-# The old name-encoding badge set. Kept here so it cannot be re-added after
-# it is purged from history.
+# The old name-encoding badge set. Purged from history on 2026-08-13; these
+# entries stop it being re-added.
 PihiQRcodes_ready.zip
 PihiQRcodes/
 
 __pycache__/
 *.pyc
+
+# macOS Finder metadata.
+.DS_Store
