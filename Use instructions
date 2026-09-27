@@ -5,3 +5,10 @@ Step 3.) Go to the terminal and type "sudo -E python3 -u ~/QR_reader/code.py", n
 Step 4.) Now scan the badges and sign people in
 Step 5.) To end the script plug in the keyboard and press "q"
 Step 6.) Now you can just unplug the pi, or plug in monitor and mouse to type "sudo shutdown now" before unplugging
+
+One-time setup: the Google key file
+The program looks for the key at ~/QR_reader/service_account.json. Google names the file something like "fifth-chalice-487115-u5-1f3b8eea7e11.json" when you download it, and the old version of code.py used that name, so it has to be renamed once.
+Before Step 3, the first time you run the updated code (or after putting a new key on the Pi), go to the terminal and type "mv ~/QR_reader/fifth-chalice-487115-u5-1f3b8eea7e11.json ~/QR_reader/service_account.json" (use the real file name if it's different)
+To check it worked, type "ls ~/QR_reader" and look for service_account.json
+If you skip this, the program stops right away with "FileNotFoundError" and nothing lights up
+Never copy the key into the GitHub repo, it works like a password for the attendance sheet
