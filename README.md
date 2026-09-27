@@ -240,8 +240,14 @@ Chief Technical Director, Primary Driver, Human Player, and so on).
 The same three values are hardcoded at the top of both [code.py](code.py) and
 [generate_badges.py](generate_badges.py), and must agree:
 
-- The Google service-account key path, under `/home/pihirobotics/QR_reader/`
-  (the key itself is on the Pi, never in this repo — `*.json` is gitignored)
+- The Google service-account key path,
+  `/home/pihirobotics/QR_reader/service_account.json` (the key itself is on the
+  Pi, never in this repo — `*.json` is gitignored). Google names a downloaded
+  key after the project and key ID, e.g. `fifth-chalice-487115-u5-….json`;
+  rename it to `service_account.json` when installing it. The Pi's older copy
+  of `code.py` pointed at the original name, so **rename the key on the Pi when
+  deploying this version**, or the kiosk stops at startup with
+  `FileNotFoundError`.
 - The spreadsheet name, `PiHi samurai NEW attendance sheet QR test 61`
 - The worksheet names, `login logs` and `master list of names`
 

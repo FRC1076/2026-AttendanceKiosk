@@ -49,7 +49,7 @@ lcd = CharLCD(numbering_mode=GPIO.BOARD,
 print("LCD ready")
 
 scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-creds = Credentials.from_service_account_file("/home/pihirobotics/QR_reader/fifth-chalice-487115-u5-1f3b8eea7e11.json", scopes=scopes)
+creds = Credentials.from_service_account_file("/home/pihirobotics/QR_reader/service_account.json", scopes=scopes)
 client = gspread.authorize(creds)
 sheet = client.open("PiHi samurai NEW attendance sheet QR test 61").worksheet("login logs")
 
