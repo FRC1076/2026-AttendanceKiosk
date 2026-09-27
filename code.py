@@ -97,7 +97,6 @@ def show_accepted(name, time_str):
 	bz.play(600)
 	sleep(0.3)
 	bz.stop()
-	fill(IDLE)
 
 def show_unauthorized():
 	lcd.clear()
@@ -107,7 +106,6 @@ def show_unauthorized():
 	bz.play(320)
 	sleep(0.5)
 	bz.stop()
-	fill(IDLE)
 
 # Purple wipe down the strip: the sheet is reachable and the roster is loaded.
 for i in range(LED_COUNT):
@@ -149,7 +147,9 @@ while True:
 			show_accepted(name, time_str)
 		else:
 			show_unauthorized()
+		# The result colour holds through the pause; purple means "scan now".
 		time.sleep(15)
+		fill(IDLE)
 
 	if keyboard.is_pressed('q'):
 		lcd.clear()

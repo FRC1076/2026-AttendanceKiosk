@@ -1,8 +1,8 @@
 # LED strip wiring — WS2812B status light
 
 The kiosk has a 50-LED WS2812B RGB strip for feedback you can see from across
-the shop: purple while it's ready, a green flash when a badge is logged, and a
-red flash for an unauthorized one. The team built and ran it on the Pi in spring
+the shop: purple while it's ready for a scan, green when a badge is logged, and
+red for an unauthorized one. The team built and ran it on the Pi in spring
 2026. That code never reached this repo until 2026-09-27, when it was brought
 over from the Pi's own copy of `code.py`.
 
@@ -146,8 +146,8 @@ What this kiosk actually shows, at 50 LEDs and full brightness:
 | State | Colour | Per LED | Whole strip |
 | --- | --- | --- | --- |
 | Idle — most of the time | purple `(75, 0, 120)` | ~15 mA | **~0.76 A, continuous** |
-| Accepted flash | green `(0, 255, 0)` | 20 mA | 1.0 A |
-| Unauthorized flash | red `(255, 0, 0)` | 20 mA | 1.0 A |
+| Accepted, held 15 s | green `(0, 255, 0)` | 20 mA | 1.0 A |
+| Unauthorized, held 15 s | red `(255, 0, 0)` | 20 mA | 1.0 A |
 | Worst case (a bug writes full white) | `(255, 255, 255)` | 60 mA | **3.0 A** |
 
 Size the supply for the **worst case plus ~30 % headroom** — **5 V 4 A** for this
@@ -313,21 +313,17 @@ OFF          = Color(0, 0, 0)
 `Color()` takes RGB and the library reorders it to the strip's native GRB — do
 not pre-swap the channels yourself.
 
-### Behaviour, and one thing to know about it
+### Behaviour
 
 - **Startup:** a purple wipe down the strip, once the sheet is reachable and the
   roster is loaded.
-- **Scan:** green or red for as long as the chime plays (~0.5 s), then back to
-  purple.
+- **Scan:** green or red, held through the 15-second pause that follows every
+  scan, then back to purple.
 - **Quit:** the strip turns off.
 
-The flash returns to purple *before* the 15-second pause in
-[code.py](../code.py) that follows every scan. So for those 15 seconds the strip
-says "ready" while the kiosk is ignoring badges. That is how it ran on the Pi,
-and it was kept as-is. If it confuses people, drop the `fill(IDLE)` at the end
-of `show_accepted` and `show_unauthorized`, and call it after the
-`time.sleep(15)` instead. The strip then holds the result colour until the kiosk
-is ready again.
+Purple means "scan now". On the Pi, the strip went back to purple as soon as
+the chime ended, so it showed "ready" for the 15 seconds the kiosk was ignoring
+badges. [code.py](../code.py) now calls `fill(IDLE)` after the pause instead.
 
 Keep effects static. A blocking animation loop stacks on top of the 15-second
 pause, and the already-sluggish `q` quit gets worse. If an animated effect is

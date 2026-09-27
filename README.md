@@ -4,7 +4,7 @@ A Raspberry Pi QR-code kiosk that logs build-season attendance for FRC Team 1076
 (PiHi Samurai). A team member holds their printed badge up to the camera; the Pi
 decodes the QR code, resolves it against a roster, appends a timestamped row to
 a Google Sheet, and confirms the scan on a small LCD, with a buzzer chirp and a
-flash on an LED strip.
+colour change on an LED strip.
 
 This repository is meant to hold everything needed to set up, run, and maintain
 the QR login system for all future seasons — the code the Pi runs, the badge
@@ -23,8 +23,9 @@ generator, and the instructions for starting the system at a build.
 5. **Feedback** — a 16x2 character LCD shows the name and time (or
    `Unauthorized`), and a `gpiozero` `TonalBuzzer` plays a rising two-tone
    accept chime or a single low reject tone. A 50-LED strip, purple while
-   idle, flashes green or red for the length of the chime. The loop then
-   pauses ~15 seconds before accepting another scan.
+   idle, turns green or red. The loop then pauses ~15 seconds before accepting
+   another scan, and the strip holds its colour until the pause ends — purple
+   always means "scan now".
 
 The team built and ran the LED strip on the Pi in spring 2026. Its code only
 reached this repo on 2026-09-27, when it was brought over from the Pi's own copy
@@ -103,8 +104,9 @@ The full write-up, with a diagram, is in
 [docs/led-strip-wiring.md](docs/led-strip-wiring.md) — this is the summary.
 
 A 50-LED WS2812B RGB strip shows scan results at a distance. It wipes purple at
-startup, stays purple while idle, flashes green for a logged badge and red for
-an unauthorized one, and turns off when the kiosk quits.
+startup, stays purple while idle, turns green for a logged badge and red for an
+unauthorized one — held until the kiosk is ready for the next scan — and turns
+off when the kiosk quits.
 
 `rpi_ws281x` cannot bit-bang the WS2812B protocol from an arbitrary pin — it
 hands timing to one of three peripherals, and each is hard-wired to specific
@@ -264,10 +266,6 @@ it off once everyone has been reprinted.
   the old name-encoding badges. Deploying this repo's [code.py](code.py) fixes
   the DMA, but also switches to badge IDs — plan the reprint first, or set
   `ALLOW_LEGACY_NAME_BADGES` for the transition.
-- **The strip says "ready" while the kiosk isn't.** The flash returns to purple
-  as soon as the chime ends, before the 15-second pause, so the strip shows idle
-  while badges are being ignored. That is how it ran on the Pi. The fix is in
-  [docs/led-strip-wiring.md](docs/led-strip-wiring.md#behaviour-and-one-thing-to-know-about-it).
 - **The roster is read once at startup**, so adding a person, or minting their
   ID, requires restarting the kiosk.
 - **The `q` quit check sits outside the scan loop** and only runs between
