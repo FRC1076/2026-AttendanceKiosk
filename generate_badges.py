@@ -16,9 +16,13 @@ Output lands in badges/, which is gitignored. The PNGs are captioned with the
 person's name so they can be handed out, which makes them student data -- they
 stay local and are never committed.
 
+--test writes the test badges into test_badges/ instead. They hold no student
+data, need no sheet access, and are committed so anyone can check the kiosk.
+
 Usage:
     python3 generate_badges.py            # mint missing IDs, write PNGs
     python3 generate_badges.py --dry-run  # report what would change
+    python3 generate_badges.py --test     # rewrite test_badges/
 """
 
 import argparse
@@ -28,9 +32,7 @@ import secrets
 import sys
 from pathlib import Path
 
-import gspread
 import qrcode
-from google.oauth2.service_account import Credentials
 from PIL import Image, ImageDraw, ImageFont
 
 CREDS_PATH = "/home/pihirobotics/QR_reader/service_account.json"
@@ -50,6 +52,17 @@ ID_PREFIX = "1076"
 # hard to transcribe wrong when someone is troubleshooting a bad badge.
 ID_ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"
 ID_LENGTH = 4
+
+# (badge ID, filename, what the kiosk should do). TEST-OK and TEST-LOG must
+# match TEST_BADGES in code.py. TEST-REJECT is in neither on purpose -- it takes
+# the reject path like any unknown ID. None of these can collide with a minted
+# ID, which always starts with ID_PREFIX.
+TEST_BADGES = [
+    ("TEST-OK", "1_accept", "green · not logged"),
+    ("TEST-LOG", "2_accept_and_log", "green · logs a row"),
+    ("TEST-REJECT", "3_reject", "red · Unauthorized"),
+]
+TEST_DIR = "test_badges"
 
 FONT_CANDIDATES = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -85,7 +98,7 @@ def safe_filename(name):
     return slug or "unnamed"
 
 
-def make_badge(badge_id, name, subteam, out_dir):
+def make_badge(badge_id, name, subteam, out_dir, filename=None):
     qr = qrcode.QRCode(
         error_correction=qrcode.constants.ERROR_CORRECT_M,
         box_size=8,
@@ -110,9 +123,36 @@ def make_badge(badge_id, name, subteam, out_dir):
         draw.text(((canvas.width - width) / 2, y), text, fill="black", font=font)
         y += size + 6
 
-    path = out_dir / f"{safe_filename(name)}_{badge_id}.png"
+    path = out_dir / (filename or f"{safe_filename(name)}_{badge_id}.png")
     canvas.save(path)
     return path
+
+
+def make_test_badges(out_dir):
+    """Write each test badge, plus all of them on one page for printing."""
+    out_dir.mkdir(exist_ok=True)
+    paths = [
+        make_badge(badge_id, "TEST BADGE", expect, out_dir, f"{stem}.png")
+        for badge_id, stem, expect in TEST_BADGES
+    ]
+    badges = [Image.open(path) for path in paths]
+
+    margin, gap, title_h = 40, 40, 70
+    width = 2 * margin + sum(b.width for b in badges) + gap * (len(badges) - 1)
+    height = 2 * margin + title_h + max(b.height for b in badges)
+    sheet = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(sheet)
+    draw.text((margin, margin), "Attendance kiosk test badges", fill="black",
+              font=load_font(24))
+    draw.text((margin, margin + 34), "Cut apart before scanning -- the kiosk "
+              "reads every code in view.", fill="black", font=load_font(15))
+
+    x = margin
+    for badge in badges:
+        sheet.paste(badge, (x, margin + title_h))
+        x += badge.width + gap
+    sheet.save(out_dir / "all_test_badges.png")
+    return paths
 
 
 def read_roster(worksheet):
@@ -143,7 +183,21 @@ def main():
         action="store_true",
         help="report what would change without writing IDs or PNGs",
     )
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help=f"write the test badges into {TEST_DIR}/ and exit; no sheet access",
+    )
     args = parser.parse_args()
+
+    if args.test:
+        paths = make_test_badges(Path(TEST_DIR))
+        print(f"Wrote {len(paths)} test badges and all_test_badges.png to {TEST_DIR}/.")
+        return
+
+    # Imported here so --test works on a machine without the Sheets libraries.
+    import gspread
+    from google.oauth2.service_account import Credentials
 
     creds = Credentials.from_service_account_file(CREDS_PATH, scopes=SCOPES)
     client = gspread.authorize(creds)

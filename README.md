@@ -36,7 +36,8 @@ of `code.py`. See [LED status strip](#led-status-strip).
 | Path | What it is |
 | --- | --- |
 | [code.py](code.py) | The entire kiosk program — one file, one `while True` loop. Runs on the Pi. |
-| [generate_badges.py](generate_badges.py) | Mints badge IDs into the roster sheet and renders printable PNGs into a local, gitignored `badges/`. Run on any machine with the service-account key. |
+| [generate_badges.py](generate_badges.py) | Mints badge IDs into the roster sheet and renders printable PNGs into a local, gitignored `badges/`. Run on any machine with the service-account key. `--test` regenerates `test_badges/` instead, with no key needed. |
+| [test_badges/](test_badges) | Three committed badges — accept, accept-and-log, reject — for checking the kiosk end to end without touching the roster. |
 | [Use instructions](Use%20instructions) | Step-by-step operating procedure for starting and stopping the kiosk at a build session. |
 | [hardware_tests/](hardware_tests) | One small script per part — LCD, buzzer, LED strip, camera, plus a live camera preview for aiming. Run one when a part misbehaves, to separate a wiring fault from a code fault. |
 | [docs/led-strip-wiring.md](docs/led-strip-wiring.md) | Wiring for the WS2812B status strip: pin choice and why, what is and isn't known about the build, recommended parts, power budget, software traps, and a checklist. |
@@ -197,6 +198,11 @@ sudo -E python3 -u ~/QR_reader/code.py
 
 Peripherals can be unplugged once it's running. Press `q` (keyboard reattached)
 to stop, then `sudo shutdown now`.
+
+To check it's working, scan the badges in [test_badges/](test_badges): one
+accepts without logging, one accepts and logs a `TEST BADGE` row, and one is
+rejected. [test_badges/README.md](test_badges/README.md) lists what each should
+do and what a failure points to.
 
 ## Roster and badges
 

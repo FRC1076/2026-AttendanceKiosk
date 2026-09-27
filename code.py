@@ -66,6 +66,15 @@ COL_ID = 2
 # unreprinted badges keep working. Turn it off once everyone has a new badge.
 ALLOW_LEGACY_NAME_BADGES = False
 
+# Test badges, printed in test_badges/ by generate_badges.py --test. Built in so
+# anyone can check the kiosk without editing the roster. Each maps to
+# (LCD name, subteam, append a row to the sheet?). TEST-REJECT is absent on
+# purpose: it takes the reject path like any unknown ID.
+TEST_BADGES = {
+	"TEST-OK":  ("Test: not logged", "Test", False),
+	"TEST-LOG": ("TEST BADGE", "Test", True),
+}
+
 def load_roster(worksheet):
 	"""Map badge ID -> (name, subteam)."""
 	rows = worksheet.get_all_values()
@@ -130,7 +139,13 @@ while True:
 	for qr in qrs:
 		data = qr.data.decode('utf-8').strip()
 		print(data)
-		entry = roster.get(data.upper())
+		badge_id = data.upper()
+		entry = roster.get(badge_id)
+		log_scan = True
+
+		if badge_id in TEST_BADGES:
+			name, title, log_scan = TEST_BADGES[badge_id]
+			entry = (name, title)
 
 		if entry is None and ALLOW_LEGACY_NAME_BADGES and "," in data:
 			old_name, _, old_subteam = data.partition(",")
@@ -143,7 +158,8 @@ while True:
 			date_str = now.strftime("%Y-%m-%d")
 			time_str = now.strftime("%H:%M:%S")
 
-			sheet.append_row([name, title, date_str, time_str])
+			if log_scan:
+				sheet.append_row([name, title, date_str, time_str])
 			show_accepted(name, time_str)
 		else:
 			show_unauthorized()
