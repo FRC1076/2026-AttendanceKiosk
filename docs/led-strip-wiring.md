@@ -1,13 +1,36 @@
-# LED strip wiring plan — WS2812B status light
+# LED strip wiring — WS2812B status light
 
-Adds an addressable RGB strip to the kiosk for at-a-glance scan feedback (green =
-logged, red = unauthorized, amber = ready/waiting), without moving a single wire
-that is already on the board.
+The kiosk has a 50-LED WS2812B RGB strip for feedback you can see from across
+the shop: purple while it's ready, a green flash when a badge is logged, and a
+red flash for an unauthorized one. The team built and ran it on the Pi in spring
+2026. That code never reached this repo until 2026-09-27, when it was brought
+over from the Pi's own copy of `code.py`.
 
 **Companion diagram:** [led-strip-wiring.svg](led-strip-wiring.svg)
 
 Target board is the Pi 3B the team runs today. See
-[Pi 5 caveat](#pi-5-does-not-work-with-this-plan) before swapping boards.
+[Pi 5 caveat](#pi-5-cannot-drive-this-strip) before swapping boards.
+
+> An earlier version of this doc planned the strip on GPIO12 / pin 32, written
+> before anyone knew the strip already existed. The real kiosk uses GPIO21 /
+> pin 40, and this doc now describes that.
+
+---
+
+## What is known and what isn't
+
+The Pi's code confirms the data pin, the buzzer move, the LED count, and the
+colours. It says nothing about the parts between the Pi and the strip. **Check
+the kiosk against the list below and correct this doc where it differs.**
+
+| | Status |
+| --- | --- |
+| Strip data on GPIO21, physical pin 40 | confirmed from code |
+| Buzzer moved to GPIO20, physical pin 38 | confirmed from code |
+| 50 LEDs, RGB (not RGBW) | confirmed |
+| Which GND pin the strip uses | **not recorded.** Any GND works; the diagram shows pin 34 |
+| Level shifter, series resistor, bulk capacitor | **not recorded.** Recommended below |
+| How the strip is powered | **not recorded.** Must not be the Pi's header 5 V (see [Power budget](#power-budget)) |
 
 ---
 
@@ -15,83 +38,91 @@ Target board is the Pi 3B the team runs today. See
 
 | | |
 | --- | --- |
-| Data pin | **GPIO12 — physical pin 32** |
-| Ground reference | **Physical pin 34** (adjacent GND) |
-| Peripheral used | Hardware PWM0, channel 0, via DMA |
+| Data pin | **GPIO21 — physical pin 40** |
+| Ground reference | Any GND pin — **pin 34** shown in the diagram |
+| Peripheral used | PCM, channel 0, via DMA |
 | Library | `rpi_ws281x` |
-| Pins that have to move | **None** |
-| New `config.txt` line | `dtparam=audio=off` |
-| New parts | 74AHCT125 level shifter, 470 Ω resistor, 1000 µF cap, separate 5 V supply |
+| Moved to make room | Buzzer, from GPIO21 (pin 40) to **GPIO20 (pin 38)** |
+| `config.txt` changes | **None** |
+| Recommended parts | 74AHCT125 level shifter, 470 Ω resistor, 1000 µF cap, separate 5 V supply |
 
 The strip is **not** powered from the Pi's header.
 
 ---
 
-## Why GPIO12
+## Why GPIO21
 
 `rpi_ws281x` does not bit-bang the WS2812B protocol from a general GPIO. It hands
 the job to one of three hardware peripherals, and each peripheral can only be
-routed to specific pins. That is the entire constraint:
+routed to specific pins:
 
 | Peripheral | Pins it can use | Status in this build |
 | --- | --- | --- |
-| PWM0 | GPIO12 (pin 32), GPIO18 (pin 12) | GPIO18 is **LCD D6**. GPIO12 is **free**. |
-| PWM1 | GPIO13 (pin 33), GPIO19 (pin 35) | Both free — usable backup |
-| PCM | GPIO21 (pin 40) | **Buzzer** |
+| PWM0 | GPIO12 (pin 32), GPIO18 (pin 12) | GPIO18 is **LCD D6**. GPIO12 is free — the fallback |
+| PWM1 | GPIO13 (pin 33), GPIO19 (pin 35) | Both free |
+| PCM | GPIO21 (pin 40) | **The strip** |
 | SPI0 MOSI | GPIO10 (pin 19) | **LCD RS**, and SPI must stay disabled |
 
-So three of the four routes are already occupied by the LCD and the buzzer, which
-is where the GPIO18 collision in the README comes from. GPIO12 is PWM0's
-*primary* pin (ALT0) rather than the alternate, it is unused, and it maps to
-`rpi_ws281x` channel 0 — the default, best-tested path in the library.
+GPIO21 used to be the buzzer. The team moved the buzzer to GPIO20. That was
+easy because a buzzer can run from any pin: gpiozero drives it with software
+PWM.
 
-**Backup if GPIO12 is ever needed for something else:** GPIO13 (pin 33), with
-`channel=1` passed to the library. Keep pin 33 unpopulated for that reason.
+PCM is a good route for this kiosk. The two PWM routes share hardware with the
+Pi's analog audio, so they need `dtparam=audio=off`. PCM doesn't, and there is
+nothing to add to `config.txt`. The cost is that PCM is also the Pi's I2S
+digital-audio block, so no I2S audio HAT or overlay can be used alongside the
+strip.
+
+**Fallback if PCM is ever needed for something else:** GPIO12 (pin 32) on PWM0,
+channel 0. Moving there means adding `dtparam=audio=off`. Keep pin 32 unpopulated
+so that option stays open.
 
 ---
 
-## Full header map after the change
+## Full header map
 
-Physical pin numbers. `RPLCD` is configured in BOARD numbering and `gpiozero`
-in BCM, so both are shown.
+Physical pin numbers. `RPLCD` is configured in BOARD numbering, and
+`gpiozero` and `rpi_ws281x` use BCM, so both are shown.
 
-| Pin | BCM | Assigned to | State |
+| Pin | BCM | Assigned to | Notes |
 | --- | --- | --- | --- |
-| 2 | 5V | LCD VDD | existing |
-| 11 | GPIO17 | LCD D5 | existing |
-| 12 | GPIO18 | LCD D6 | existing — *this is why PWM0-alt is unavailable* |
-| 14 | GND | LCD VSS + R/W + backlight cathode | existing |
-| 15 | GPIO22 | LCD D7 | existing |
-| 16 | GPIO23 | LCD D4 | existing |
-| 18 | GPIO24 | LCD E | existing |
-| 19 | GPIO10 | LCD RS | existing — *SPI0 must stay off* |
-| **32** | **GPIO12** | **WS2812B data → level shifter** | **new** |
-| **34** | **GND** | **Common ground → level shifter, strip, PSU** | **new** |
-| 33 | GPIO13 | *reserved as PWM1 backup* | keep free |
-| 39 | GND | Buzzer − | existing |
-| 40 | GPIO21 | Buzzer + | existing |
+| 2 | 5V | LCD VDD | |
+| 11 | GPIO17 | LCD D5 | |
+| 12 | GPIO18 | LCD D6 | *this is why PWM0's GPIO18 pin is unavailable* |
+| 14 | GND | LCD VSS + R/W + backlight cathode | |
+| 15 | GPIO22 | LCD D7 | |
+| 16 | GPIO23 | LCD D4 | |
+| 18 | GPIO24 | LCD E | |
+| 19 | GPIO10 | LCD RS | *SPI0 must stay off* |
+| 32 | GPIO12 | *keep free — PWM0 fallback for the strip* | |
+| **34** | **GND** | **Strip common ground** | shown in the diagram; confirm on the kiosk |
+| **38** | **GPIO20** | **Buzzer +** | moved from pin 40 |
+| 39 | GND | Buzzer − | |
+| **40** | **GPIO21** | **Strip data → level shifter** | PCM |
 | 27, 28 | ID_SD / ID_SC | HAT EEPROM | never use |
 
-Everything else on the header is unused and stays that way.
-
-GPIO current draw across all pins is **24 mA of the 50 mA budget** — the strip
-draws nothing from the header, only the data pin does, and that sinks into a
-buffer input.
+Everything else on the header is unused.
 
 ---
 
-## Parts to add
+## Recommended parts
+
+These are what the strip *should* have between it and the Pi. The kiosk may not
+have all of them — see [What is known](#what-is-known-and-what-isnt). A WS2812B
+often works straight from a 3.3 V pin on the bench, which is why a strip can run
+for a whole season without them. It stops working when a cable gets longer, the
+supply sags, or the shop is cold.
 
 | Part | Spec | Why it is not optional |
 | --- | --- | --- |
-| Level shifter | **74AHCT125** (quad buffer, DIP-14) | Pi outputs 3.3 V. WS2812B wants V<sub>IH</sub> ≥ 0.7 × 5 V = **3.5 V**. 3.3 V is out of spec — it often works on the bench and then fails on a longer cable in the shop. `HCT` is the key part of the part number: TTL input thresholds, so 3.3 V reads as a solid high while the chip runs on 5 V. |
+| Level shifter | **74AHCT125** (quad buffer, DIP-14) | Pi outputs 3.3 V. WS2812B wants V<sub>IH</sub> ≥ 0.7 × 5 V = **3.5 V**. 3.3 V is out of spec. `HCT` is the key part of the part number: TTL input thresholds, so 3.3 V reads as a solid high while the chip runs on 5 V. |
 | Series resistor | **470 Ω**, ¼ W (330–500 Ω fine) | Damps reflections on the data line and limits current into the first LED's input diode on power-up. |
 | Bulk capacitor | **1000 µF, 10 V** electrolytic | The strip's inrush at power-on can sag the rail enough to reset the first LEDs. Fit it across the strip's V+/GND at the strip end. **Polarity matters** — stripe goes to GND. |
-| 5 V supply | Separate PSU, sized below | See [Power budget](#power-budget). |
-| Strip | WS2812B or SK6812 | SK6812 (RGBW) is protocol-compatible; pass `strip_type=ws.SK6812_STRIP_GRBW`. |
+| 5 V supply | Separate PSU, **5 V 4 A** for 50 LEDs | See [Power budget](#power-budget). |
+| Strip | WS2812B RGB, 50 LEDs | Confirmed RGB. The Pi's old `lighttest.py` set the pixel order to `GRBW` — that was wrong for this strip. Use the library's default GRB type. |
 
 Alternatives to the 74AHCT125 if that is what the parts bin has: 74HCT245,
-SN74LV1T34, or a 74HCT14. Any `HCT`-family buffer works. A `HC`-family part does
+SN74LV1T34, or a 74HCT14. Any `HCT`-family buffer works. An `HC`-family part does
 **not** — it has CMOS thresholds and 3.3 V will be marginal.
 
 ### The cheap fallback, and why it is a fallback
@@ -110,33 +141,42 @@ unattended during build season.
 WS2812B draws up to **60 mA per LED** at full white, 100 % brightness — that is
 20 mA per colour channel.
 
-| LEDs | Worst case (white, full) | Typical (one colour, 40 % bright) | Supply to buy |
-| --- | --- | --- | --- |
-| 8 | 0.48 A | ~0.15 A | 5 V 1 A |
-| 16 | 0.96 A | ~0.3 A | 5 V 2 A |
-| 30 | 1.8 A | ~0.6 A | 5 V 3 A |
-| 60 | 3.6 A | ~1.2 A | 5 V 5 A |
+What this kiosk actually shows, at 50 LEDs and full brightness:
 
-Size the supply for the **worst case plus ~30 % headroom**, even if the code
-never shows full white — a bug that writes `(255,255,255)` to every pixel should
-not brown out the kiosk.
+| State | Colour | Per LED | Whole strip |
+| --- | --- | --- | --- |
+| Idle — most of the time | purple `(75, 0, 120)` | ~15 mA | **~0.76 A, continuous** |
+| Accepted flash | green `(0, 255, 0)` | 20 mA | 1.0 A |
+| Unauthorized flash | red `(255, 0, 0)` | 20 mA | 1.0 A |
+| Worst case (a bug writes full white) | `(255, 255, 255)` | 60 mA | **3.0 A** |
+
+Size the supply for the **worst case plus ~30 % headroom** — **5 V 4 A** for this
+strip — even though the code never shows full white.
+
+| LEDs | Worst case (white, full) | Supply to buy |
+| --- | --- | --- |
+| 16 | 0.96 A | 5 V 2 A |
+| 30 | 1.8 A | 5 V 3 A |
+| **50** | **3.0 A** | **5 V 4 A** |
+| 60 | 3.6 A | 5 V 5 A |
 
 Two rules that matter more than the numbers:
 
 1. **Do not feed the strip from header pins 2/4 (5 V).** Those are unfused
-   pass-through from the Pi's own PSU. A strip pulling an amp through them will
-   sag the 5 V rail, and the usual symptom is not a dark strip — it is SD card
-   corruption and a kiosk that will not boot on Saturday morning.
-2. **Tie the grounds together.** Strip GND, PSU GND, and Pi header pin 34 must be
+   pass-through from the Pi's own PSU. Even the idle purple alone is ~0.76 A
+   around the clock, on top of the Pi and camera. The usual symptom is not a
+   dark strip — it is SD card corruption and a kiosk that will not boot on
+   Saturday morning.
+2. **Tie the grounds together.** Strip GND, PSU GND, and a Pi GND pin must be
    common. The data signal is referenced to ground; without a shared return the
    strip sees garbage or nothing.
 
-Set a brightness ceiling in software (`brightness=60` out of 255 is a good
-starting point). It cuts current by roughly three quarters and stops the strip
-being blinding in a lit shop.
+`LED_BRIGHTNESS` in [code.py](../code.py) is 255 to match the look the team
+tuned on the kiosk. Dropping it to ~60 cuts every figure above by roughly three
+quarters, and is the first thing to try if the supply is marginal.
 
-For strips over ~30 LEDs, inject 5 V and GND again at the far end from the same
-supply — the strip's own copper traces are thin and the far end will go brown.
+At 50 LEDs, inject 5 V and GND again at the far end from the same supply — the
+strip's own copper traces are thin and the far end goes brown at full green.
 
 ---
 
@@ -149,9 +189,12 @@ Physical pin numbers on the Pi. 74AHCT125 pin numbers are the DIP-14 pinout
 
 | From | To | Notes |
 | --- | --- | --- |
-| Pi pin 32 (GPIO12) | 74AHCT125 pin 2 (`1A`) | 3.3 V logic in |
+| Pi pin 40 (GPIO21) | 74AHCT125 pin 2 (`1A`) | 3.3 V logic in |
 | 74AHCT125 pin 3 (`1Y`) | 470 Ω resistor | 5 V logic out |
 | 470 Ω resistor | Strip `DIN` | Keep this leg short |
+
+Without a level shifter, pin 40 goes through the 470 Ω resistor straight to
+`DIN`.
 
 ### Level shifter power and housekeeping
 
@@ -169,19 +212,21 @@ Physical pin numbers on the Pi. 74AHCT125 pin numbers are the DIP-14 pinout
 | --- | --- | --- |
 | PSU +5 V | Strip `+5V` | |
 | PSU GND | Strip `GND` | |
-| PSU GND | Pi pin 34 (GND) | **The common-ground link. Do not skip.** |
+| PSU GND | Pi pin 34 (GND) | **The common-ground link. Do not skip.** Any Pi GND pin works |
 | 1000 µF cap `+` | Strip `+5V` | At the strip end |
 | 1000 µF cap `−` (stripe) | Strip `GND` | |
 
-### Unchanged
+### Rest of the kiosk
 
 | Component | Connection |
 | --- | --- |
 | LCD | Pins 2, 11, 12, 14, 15, 16, 18, 19 + contrast pot on V0, R/W tied to GND |
-| Buzzer | Pins 39, 40 |
+| Buzzer | Pins 38 (+) and 39 (−) |
 | Camera | CSI ribbon — uses no header pins |
 
 ### Order of assembly
+
+When rebuilding the strip wiring, or fitting the protection parts:
 
 1. Wire and verify grounds first, with the PSU **off**.
 2. Level shifter power and the three tie-offs (`1OE` low, unused `OE` high,
@@ -197,25 +242,16 @@ Physical pin numbers on the Pi. 74AHCT125 pin numbers are the DIP-14 pinout
 
 ### `/boot/config.txt`
 
-On the Pi 3, the file is at `/boot/config.txt`. (Pi 4/5 on Bookworm:
-`/boot/firmware/config.txt`.)
+Nothing to add for the PCM route.
 
-```
-dtparam=audio=off
-```
+Do **not** enable I2S audio — no `dtparam=i2s=on`, and no audio-HAT overlays such
+as `hifiberry-dac`. They claim the PCM block the strip runs on.
 
-That single line is required. The PWM block is shared with the analog audio path,
-and leaving audio enabled makes the LED timing jitter — the symptom is random
-pixels flashing the wrong colour.
+Do **not** add `dtoverlay=pwm` either, even if pin-assignment tooling suggests it.
+`rpi_ws281x` programs the hardware directly through `/dev/mem`, and a kernel
+driver on the same block fights it.
 
-**Do not add `dtoverlay=pwm`.** `rpi_ws281x` programs the PWM peripheral directly
-through `/dev/mem` and DMA; the kernel overlay would claim the same hardware and
-the two fight. This is a common wrong answer from pin-assignment tooling, and the
-LED output will be silently broken if you take it.
-
-SPI stays disabled, exactly as today — LCD RS is on GPIO10.
-
-Reboot after editing.
+SPI stays disabled — LCD RS is on GPIO10.
 
 ### Install
 
@@ -236,96 +272,95 @@ sudo pip3 install --break-system-packages rpi_ws281x
 
 `rpi_ws281x` needs `/dev/mem` and DMA access, so it must run as root. The kiosk
 already does — [Use instructions](../Use%20instructions) launches it with
-`sudo -E python3`. No change needed, but the script will now fail with a
-permissions error rather than just not lighting up if that ever changes.
+`sudo -E python3`. If that ever changes, the script fails at `strip.begin()`
+with a permissions error.
 
 ### DMA channel
 
-Leave it at the library default, **DMA 10**.
+**DMA 10.** [code.py](../code.py) sets it explicitly.
 
-Older examples and blog posts pass `dma=5`. On a Pi 3 that channel is used by the
-SD card controller, and the result is filesystem corruption. If you copy code
-from a tutorial, check this line.
+The Pi's own copy of `code.py`, and its `ws281test.py`, passed `dma=5` — copied
+from older tutorials. On a Pi 3, channel 5 is used by the SD card controller,
+and the result is filesystem corruption. If the kiosk has had unexplained SD
+card trouble, this is the first suspect. Replace those files on the Pi with the
+ones in this repo.
 
 ### Initialization
+
+As in [code.py](../code.py):
 
 ```python
 from rpi_ws281x import PixelStrip, Color
 
-LED_COUNT      = 16      # match the strip actually fitted
-LED_PIN        = 12      # BCM 12 = physical pin 32, hardware PWM0
+LED_COUNT      = 50
+LED_PIN        = 21      # BCM 21 = physical pin 40, PCM
 LED_FREQ_HZ    = 800000  # WS2812B bit rate
-LED_DMA        = 10      # library default -- do NOT use 5 on a Pi 3
-LED_BRIGHTNESS = 60      # 0-255. Caps current draw and shop glare.
+LED_DMA        = 10      # not 5 -- on a Pi 3 channel 5 belongs to the SD card
 LED_INVERT     = False   # True only if the level shifter inverts (74AHCT125 does not)
-LED_CHANNEL    = 0       # PWM0 -> channel 0. GPIO13/19 would be channel 1.
+LED_BRIGHTNESS = 255     # 0-255. Lower it to cut current and glare.
+LED_CHANNEL    = 0       # PCM and PWM0 are channel 0; PWM1 would be 1
 
 strip = PixelStrip(LED_COUNT, LED_PIN, LED_FREQ_HZ, LED_DMA,
                    LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL)
 strip.begin()
 
-READY        = Color(40, 25, 0)   # amber
-ACCEPTED     = Color(0, 120, 0)   # green
-UNAUTHORIZED = Color(140, 0, 0)   # red
-
-def fill(color):
-    for i in range(strip.numPixels()):
-        strip.setPixelColor(i, color)
-    strip.show()
-
-fill(READY)
+IDLE         = Color(75, 0, 120)   # purple
+ACCEPTED     = Color(0, 255, 0)
+UNAUTHORIZED = Color(255, 0, 0)
+OFF          = Color(0, 0, 0)
 ```
 
-`Color()` takes RGB and reorders to the strip's native GRB internally — do not
-pre-swap the channels yourself.
+`Color()` takes RGB and the library reorders it to the strip's native GRB — do
+not pre-swap the channels yourself.
 
-### One thing to watch in `code.py`
+### Behaviour, and one thing to know about it
 
-[code.py:105](../code.py) sleeps 15 seconds inside the `for qr` loop after every
-scan. Any LED animation written as a blocking `for`/`sleep` loop will stack on top
-of that and make the kiosk feel even less responsive, and the `q` quit check —
-already noted as sluggish in the README's known issues — gets worse.
+- **Startup:** a purple wipe down the strip, once the sheet is reachable and the
+  roster is loaded.
+- **Scan:** green or red for as long as the chime plays (~0.5 s), then back to
+  purple.
+- **Quit:** the strip turns off.
 
-Set a **static colour** on each scan result (`fill(ACCEPTED)` / `fill(UNAUTHORIZED)`),
-let it hold through the existing sleep, and return to `READY` at the top of the
-loop. If an animated effect is wanted later, run it on a `threading.Thread` with a
-flag rather than inlining it.
+The flash returns to purple *before* the 15-second pause in
+[code.py](../code.py) that follows every scan. So for those 15 seconds the strip
+says "ready" while the kiosk is ignoring badges. That is how it ran on the Pi,
+and it was kept as-is. If it confuses people, drop the `fill(IDLE)` at the end
+of `show_accepted` and `show_unauthorized`, and call it after the
+`time.sleep(15)` instead. The strip then holds the result colour until the kiosk
+is ready again.
+
+Keep effects static. A blocking animation loop stacks on top of the 15-second
+pause, and the already-sluggish `q` quit gets worse. If an animated effect is
+wanted, run it on a `threading.Thread` rather than inline.
 
 ---
 
 ## Warnings
 
-### The buzzer and the strip do not conflict — unless the pin factory changes
+### Do not switch gpiozero to `PiGPIOFactory`
 
-`gpiozero`'s default pin factory (`RPi.GPIO`) drives `TonalBuzzer` with **software**
-PWM, so it never claims the hardware PWM0 block that `rpi_ws281x` needs. They
-coexist fine as configured today.
+It looks like a free upgrade for cleaner buzzer tones. But `pigpiod` times its
+PWM with a hardware peripheral, and its default choice is PCM — the block the
+strip runs on. The two will fight: glitching colours, a hung `pigpiod`, or
+both. gpiozero's default factory drives the buzzer with software PWM, which is
+why the buzzer and strip coexist today.
 
-If anyone ever switches gpiozero to `PiGPIOFactory` — a reasonable-looking change,
-since pigpio gives much cleaner tones — **it will break the LEDs**. `pigpiod` also
-uses DMA and the PWM peripheral, and the two libraries will fight over them.
-Symptoms are glitching colours, a hung `pigpiod`, or both. If cleaner buzzer tones
-are wanted, move the buzzer to a hardware PWM pin under `rpi_ws281x`-free control,
-or accept the software PWM.
+### Pi 5 cannot drive this strip
 
-### Pi 5 does not work with this plan
+`rpi_ws281x` has **no Pi 5 support at all**. It reaches the PCM/PWM/DMA hardware
+through the SoC's memory map, and on the Pi 5 those peripherals sit behind the
+RP1 I/O controller, where that approach does not work. Unlike the `RPi.GPIO`
+problem in the README, there is no drop-in fix.
 
-The README already notes that `RPi.GPIO` breaks on the Pi 5's RP1 I/O controller
-and needs `rpi-lgpio`. `rpi_ws281x` is worse off: it has **no Pi 5 support at
-all**. It reaches the PWM/DMA hardware through the SoC's memory map, and on the
-Pi 5 those peripherals live behind RP1 where that approach does not work.
-
-If the board is ever moved to a Pi 5, the options are an SPI-driven strip library,
-or an external microcontroller doing the timing. Neither is a drop-in. This is a
-new reason to stay on Pi 3/4 beyond the ones already listed.
+If the board is ever moved to a Pi 5, the options are an SPI-driven strip
+library, or an external microcontroller doing the timing. Neither is a drop-in.
 
 ### Pre-existing: the buzzer has no driver transistor
 
-Not caused by this change, but worth fixing on the same bench session. A passive
-piezo is an inductive load driven straight off GPIO21. Per-pin limit on the Pi is
-16 mA and there is no flyback path. A small NPN (2N3904) with a base resistor and
-a flyback diode is the correct drive. It has presumably been fine so far; it is
-still on the wrong side of the spec.
+A passive piezo is driven straight off GPIO20. Per-pin limit on the Pi is 16 mA
+and there is no flyback path. A small NPN (2N3904) with a base resistor and a
+flyback diode is the correct drive. It has been fine so far; it is still on the
+wrong side of the spec.
 
 ### 5 V never touches a GPIO
 
@@ -338,24 +373,25 @@ that way.
 
 ## Verification
 
-Before wiring the strip, confirm the pin can be driven:
+[hardware_tests/led_strip_test.py](../hardware_tests/led_strip_test.py) wipes
+the strip purple, holds 5 seconds, and turns it off:
 
 ```bash
-sudo python3 -c "from rpi_ws281x import PixelStrip, Color; s=PixelStrip(1,12,800000,10,False,60,0); s.begin(); s.setPixelColor(0,Color(0,80,0)); s.show()"
+sudo python3 hardware_tests/led_strip_test.py
 ```
 
-Then, in order:
+When checking or rebuilding the wiring, in order:
 
-1. **Grounds** — continuity between Pi pin 34, PSU −, strip GND, and 74AHCT125
-   pin 7 with the PSU off.
-2. **Level shifter output** — scope or meter on pin 3 while running the snippet
-   above; it should swing to ~5 V, not ~3.3 V. A 3.3 V swing means the chip is an
-   `HC` part, not `HCT`, or `VCC` is on 3.3 V.
-3. **First LED only** — set `LED_COUNT = 1` and confirm colour accuracy before
-   lighting the whole strip. Wrong colours here mean a strip-type mismatch
-   (RGB vs GRB), not a wiring fault.
-4. **Full strip at low brightness**, then measure current at full white to check
-   the supply.
-5. **Run the kiosk end to end** and confirm the LCD still initializes. If the LCD
-   goes blank after adding the strip, the cause is almost always a shared-ground
-   or supply problem, not a pin conflict — nothing on the header moved.
+1. **Grounds** — continuity between the Pi GND pin, PSU −, strip GND, and
+   74AHCT125 pin 7, with the PSU off.
+2. **Level shifter output** — scope or meter on pin 3 while running the test; it
+   should swing to ~5 V, not ~3.3 V. A 3.3 V swing means the chip is an `HC`
+   part, not `HCT`, or `VCC` is on 3.3 V.
+3. **Colours** — the wipe should be purple, not green-ish or teal. Wrong colours
+   mean a strip-type mismatch, not a wiring fault.
+4. **Current** — measure the supply current at idle purple. ~0.76 A at full
+   brightness is expected; much more means the LED count or brightness is not
+   what the code says.
+5. **Run the kiosk end to end** and confirm the LCD still initializes and the
+   buzzer still sounds on pin 38. A blank LCD after strip work is almost always a
+   shared-ground or supply problem, not a pin conflict.

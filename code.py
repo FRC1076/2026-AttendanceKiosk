@@ -10,13 +10,43 @@ from RPLCD import CharLCD
 from RPi import GPIO
 import keyboard
 from gpiozero import TonalBuzzer
-bz = TonalBuzzer(21)
+from rpi_ws281x import PixelStrip, Color
+
+# WS2812B RGB strip. Data is on BCM 21 = physical pin 40, driven by the PCM
+# block; the buzzer moved to BCM 20 to make room. rpi_ws281x always uses BCM
+# numbering, whatever mode RPLCD sets. See docs/led-strip-wiring.md.
+LED_COUNT      = 50
+LED_PIN        = 21
+LED_FREQ_HZ    = 800000
+LED_DMA        = 10      # not 5 -- on a Pi 3 channel 5 belongs to the SD card
+LED_INVERT     = False
+LED_BRIGHTNESS = 255     # the look tuned on the kiosk; lower it to cut current
+LED_CHANNEL    = 0
+
+IDLE         = Color(75, 0, 120)   # purple
+ACCEPTED     = Color(0, 255, 0)
+UNAUTHORIZED = Color(255, 0, 0)
+OFF          = Color(0, 0, 0)
+
+strip = PixelStrip(LED_COUNT, LED_PIN, LED_FREQ_HZ, LED_DMA,
+                   LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL)
+strip.begin()
+print("LED ready")
+
+def fill(color):
+	for i in range(LED_COUNT):
+		strip.setPixelColor(i, color)
+	strip.show()
+
+bz = TonalBuzzer(20)
+print("Buzzer ready")
 lcd = CharLCD(numbering_mode=GPIO.BOARD,
               cols=16,
               rows=2,
               pin_rs=19,
               pin_e=18,
               pins_data=[16,11,12,15])
+print("LCD ready")
 
 scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 creds = Credentials.from_service_account_file("/home/pihirobotics/QR_reader/fifth-chalice-487115-u5-1f3b8eea7e11.json", scopes=scopes)
@@ -24,6 +54,7 @@ client = gspread.authorize(creds)
 sheet = client.open("PiHi samurai NEW attendance sheet QR test 61").worksheet("login logs")
 
 master_sheet = client.open("PiHi samurai NEW attendance sheet QR test 61").worksheet("master list of names")
+print("Connected to sheet")
 
 # Badges encode an opaque ID (1076-A7F3), not a name. Column layout of the
 # roster sheet must match generate_badges.py: A name, B subteam, C badge ID.
@@ -53,6 +84,36 @@ def load_roster(worksheet):
 roster = load_roster(master_sheet)
 legacy_names = {name for name, _ in roster.values()}
 print("Loaded " + str(len(roster)) + " badge IDs")
+
+def show_accepted(name, time_str):
+	lcd.clear()
+	lcd.cursor_pos = (0, 0)
+	lcd.write_string(name[:16])
+	lcd.cursor_pos = (1, 0)
+	lcd.write_string("at " + time_str)
+	fill(ACCEPTED)
+	bz.play(440)
+	sleep(0.2)
+	bz.play(600)
+	sleep(0.3)
+	bz.stop()
+	fill(IDLE)
+
+def show_unauthorized():
+	lcd.clear()
+	lcd.cursor_pos = (0, 0)
+	lcd.write_string("Unauthorized")
+	fill(UNAUTHORIZED)
+	bz.play(320)
+	sleep(0.5)
+	bz.stop()
+	fill(IDLE)
+
+# Purple wipe down the strip: the sheet is reachable and the roster is loaded.
+for i in range(LED_COUNT):
+	strip.setPixelColor(i, IDLE)
+	strip.show()
+	sleep(0.05)
 
 picam2 = Picamera2()
 picam2.configure(picam2.create_preview_configuration())
@@ -85,26 +146,15 @@ while True:
 			time_str = now.strftime("%H:%M:%S")
 
 			sheet.append_row([name, title, date_str, time_str])
-			lcd.clear()
-			lcd.cursor_pos = (0, 0)
-			lcd.write_string(name[:16])
-			lcd.cursor_pos = (1, 0)
-			lcd.write_string("at " + time_str)
-			bz.play(440)
-			sleep(0.2)
-			bz.play(600)
-			sleep(0.3)
-			bz.stop()
+			show_accepted(name, time_str)
 		else:
-			lcd.clear()
-			lcd.cursor_pos = (0, 0)
-			lcd.write_string("Unauthorized")
-			bz.play(320)
-			sleep(0.5)
-			bz.stop()
+			show_unauthorized()
 		time.sleep(15)
-		
+
 	if keyboard.is_pressed('q'):
 		lcd.clear()
 		break
 picam2.stop()
+fill(OFF)
+bz.close()
+GPIO.cleanup()
