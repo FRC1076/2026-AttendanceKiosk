@@ -283,7 +283,8 @@ The Pi's own copy of `code.py`, and its `ws281test.py`, passed `dma=5` — copie
 from older tutorials. On a Pi 3, channel 5 is used by the SD card controller,
 and the result is filesystem corruption. If the kiosk has had unexplained SD
 card trouble, this is the first suspect. Replace those files on the Pi with the
-ones in this repo.
+ones in this repo — moving the Pi to a clone does that (see
+[pi-setup.md](pi-setup.md#first-time-moving-the-pi-to-the-clone)).
 
 ### Initialization
 

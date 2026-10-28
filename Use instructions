@@ -1,14 +1,29 @@
 The way to use this is very simple and kinda annoying.
 Step 1.) Turn on the Pi, if it's plugged in and not on, unplug it and plug it back in
 Step 2.) You will need a monitor, keyboard, and mouse to start up the program, the mouse might be optional but I wouldn't push it
-Step 3.) Go to the terminal and type "sudo -E python3 -u ~/QR_reader/code.py", now you can unplug the monitor, keyboard, and mouse
+Step 3.) Go to the terminal and type "sudo -E python3 -u ~/2026-AttendanceKiosk/code.py", now you can unplug the monitor, keyboard, and mouse
 Step 4.) Now scan the badges and sign people in
 Step 5.) To end the script plug in the keyboard and press "q"
 Step 6.) Now you can just unplug the pi, or plug in monitor and mouse to type "sudo shutdown now" before unplugging
 
-One-time setup: the Google key file
-The program looks for the key at ~/QR_reader/service_account.json. Google names the file something like "fifth-chalice-487115-u5-1f3b8eea7e11.json" when you download it, and the old version of code.py used that name, so it has to be renamed once.
-Before Step 3, the first time you run the updated code (or after putting a new key on the Pi), go to the terminal and type "mv ~/QR_reader/fifth-chalice-487115-u5-1f3b8eea7e11.json ~/QR_reader/service_account.json" (use the real file name if it's different)
+The full steps for everything below are in docs/pi-setup.md, this is the short version.
+If there is no ~/2026-AttendanceKiosk folder on the Pi yet, do the "First time" part of docs/pi-setup.md before Step 3.
+
+Updating the code
+The program runs from a copy of the GitHub repo at ~/2026-AttendanceKiosk, so new code comes from GitHub, not a USB stick.
+Never edit the code on the Pi. Change it on a laptop and push it to GitHub, then pull it onto the Pi.
+When there is new code, before Step 3, go to the terminal and type "cd ~/2026-AttendanceKiosk", then "git status". It should say "nothing to commit, working tree clean"
+Then type "git pull" to get the latest code
+After updating, scan the test badges to make sure it still works
+If the new code doesn't work, type "git log --oneline -10" to find the last version that did, then "git checkout" and that version's code (the 7 letters and numbers at the start of its line). "git checkout main" goes back to the latest
+
+Putting a new key on the Pi
+The key is NOT in the GitHub repo. It stays at ~/QR_reader/service_account.json, and you only need to do this when the key is replaced.
+Google names the downloaded file something like "project-name-123456-a1b2c3d4e5f6.json", so rename it to service_account.json when you copy it onto a USB stick.
+Plug in the stick and move the old key out of the way: type "mkdir -p ~/QR_reader/old", then "mv ~/QR_reader/service_account.json ~/QR_reader/old/"
+Copy the new key in: "cp /media/pihirobotics/STICK/service_account.json ~/QR_reader/" (STICK is the stick's name, type "ls /media/pihirobotics" to see it)
 To check it worked, type "ls ~/QR_reader" and look for service_account.json
-If you skip this, the program stops right away with "FileNotFoundError" and nothing lights up
-Never copy the key into the GitHub repo, it works like a password for the attendance sheet
+If the key is missing or misnamed, the program stops right away with "FileNotFoundError" and nothing lights up
+When it starts, it should say "Loaded" and a number of badge IDs, then scan the test badges to make sure it works
+If the new key doesn't work, put the old one back: "mv ~/QR_reader/old/service_account.json ~/QR_reader/"
+Delete the key from the USB stick when you're done. Never copy the key into the GitHub repo, it works like a password for the attendance sheet

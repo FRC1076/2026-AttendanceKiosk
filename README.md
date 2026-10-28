@@ -41,6 +41,7 @@ of `code.py`. See [LED status strip](#led-status-strip).
 | [test_badges/](test_badges) | Three committed badges — accept, accept-and-log, reject — for checking the kiosk end to end without touching the roster. |
 | [Use instructions](Use%20instructions) | Step-by-step operating procedure for starting and stopping the kiosk at a build session. |
 | [hardware_tests/](hardware_tests) | One small script per part — LCD, buzzer, LED strip, camera, plus a live camera preview for aiming. Run one when a part misbehaves, to separate a wiring fault from a code fault. |
+| [docs/pi-setup.md](docs/pi-setup.md) | How the Pi runs the kiosk from a clone of this repo: moving it to the clone, updating with `git pull`, installing a new service-account key by USB stick, testing, and going back. |
 | [docs/led-strip-wiring.md](docs/led-strip-wiring.md) | Wiring for the WS2812B status strip: pin choice and why, what is and isn't known about the build, recommended parts, power budget, software traps, and a checklist. |
 | [docs/led-strip-wiring.svg](docs/led-strip-wiring.svg) | The same wiring as a labelled diagram — every component and connection, strip path in colour and the rest of the kiosk in grey. |
 | [docs/gen_led_wiring_svg.py](docs/gen_led_wiring_svg.py) | Generates the diagram. Edit it and rerun rather than editing the SVG by hand. |
@@ -197,8 +198,11 @@ Per [Use instructions](Use%20instructions): power-cycle the Pi, attach a
 monitor and keyboard, then run
 
 ```bash
-sudo -E python3 -u ~/QR_reader/code.py
+sudo -E python3 -u ~/2026-AttendanceKiosk/code.py
 ```
+
+The Pi runs a clone of this repo, so updating it is a `git pull` there — see
+[docs/pi-setup.md](docs/pi-setup.md). Don't edit code on the Pi.
 
 Peripherals can be unplugged once it's running. Press `q` (keyboard reattached)
 to stop, then `sudo shutdown now`.
@@ -273,9 +277,10 @@ The same three values are hardcoded at the top of both [code.py](code.py) and
 
 - The Google service-account key path,
   `/home/pihirobotics/QR_reader/service_account.json` (the key itself is on the
-  Pi, never in this repo — `*.json` is gitignored). Google names a downloaded
-  key after the project and key ID; rename it to `service_account.json` when
-  installing it, or the kiosk stops at startup with `FileNotFoundError`.
+  Pi, outside the clone and never in this repo — `*.json` is gitignored). Google
+  names a downloaded key after the project and key ID; rename it to
+  `service_account.json` when installing it, or the kiosk stops at startup with
+  `FileNotFoundError`.
 - The spreadsheet ID, `SPREADSHEET_ID` — the part of the sheet's URL between
   `/d/` and `/edit`. It currently points at **1076 PiHi Samurai Attendance
   Kiosk**, owned by Mr. Van Loo's school account. Opening by ID rather than by
@@ -299,7 +304,8 @@ The 2026 sheet and key belonged to a graduated student's account, so for the
    Create). It needs no project roles.
 4. **A JSON key** for it (the service account → Keys → Add key → JSON). If the
    district blocks key creation, ask district IT. Install it on the Pi at the
-   path above, and keep any copy for running the generator elsewhere outside
+   path above — [docs/pi-setup.md](docs/pi-setup.md#installing-a-new-key) has
+   the steps — and keep any copy for running the generator elsewhere outside
    this repo.
 5. **Share the sheet** with the service account's email
    (`…@<project>.iam.gserviceaccount.com`) as an Editor.
@@ -329,17 +335,20 @@ it off once everyone has been reprinted.
 - **The Pi may still be running its own older code.** Until the Pi is updated
   from this repo, it runs `dma=5` (see [LED status strip](#led-status-strip)) and
   the old name-encoding badges. Deploying this repo's [code.py](code.py) fixes
-  the DMA, but also switches to badge IDs — plan the reprint first, or set
-  `ALLOW_LEGACY_NAME_BADGES` for the transition.
+  the DMA, but also switches to badge IDs and the new sheet and key — hand out
+  the reprinted badges first, or set `ALLOW_LEGACY_NAME_BADGES` for the
+  transition. [docs/pi-setup.md](docs/pi-setup.md#first-time-moving-the-pi-to-the-clone)
+  has the steps; after that the Pi runs from a clone and stays current with
+  `git pull`.
 - **The roster is read once at startup**, so adding a person, or minting their
   ID, requires restarting the kiosk.
 - **The `q` quit check sits outside the scan loop** and only runs between
   frames; combined with the 15-second post-scan sleep, stopping can take a
   while. `keyboard` also requires root, which is why the run command uses
   `sudo -E`.
-- **Neither script has been run end-to-end yet.** Both parse, but the ID scheme
-  is untested against the live sheet — in particular, whether `master list of
-  names` already has a header row and a subteam column in B.
+- **The kiosk hasn't been run end-to-end with badge IDs yet.** The generator
+  has: on 2026-10-28 it minted IDs into the new sheet's column C and printed
+  the badges. The kiosk side waits on the Pi update above.
 
 ## Next steps
 
