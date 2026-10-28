@@ -221,7 +221,7 @@ Column C is filled in by [generate_badges.py](generate_badges.py). Existing IDs
 are left alone, so badges printed in an earlier season keep working. Column D is
 free text — `Mentor`, `Assistant Coach`, `Mechanical Lead` — and is only
 printed on the badge, under the name, shrinking if it's too long for one line;
-blank prints as Student. The kiosk ignores column D. Column B may be blank: the
+blank prints nothing. The kiosk ignores column D. Column B may be blank: the
 badge PNG and the LCD then show just the name.
 
 To print badges:

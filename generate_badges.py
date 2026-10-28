@@ -11,7 +11,7 @@ The roster worksheet is expected to have four columns:
 
 Column C is filled in by this script. Rows that already have an ID keep it, so
 badges printed in an earlier season stay valid. Column D is free text, printed
-as typed under the name; a blank D prints as Student. Column B may be blank.
+as typed under the name; a blank D prints nothing. Column B may be blank.
 
 Output lands in badges/, which is gitignored: one PNG per person, _roster.csv,
 and badges.pdf -- fold-over badges laid out on US Letter for single-sided
@@ -95,9 +95,6 @@ SAMPLE_BADGES = [
     ("SAMPLE-06", "Alexandria Konstantinopoulou-Vanderbilt",
      "Chief Technical Director and Engineering Captain"),
 ]
-
-# Printed for anyone whose column D is blank.
-DEFAULT_ROLE = "Student"
 
 # Fold-over badge sheet. Sizes are in inches. Each badge prints as one strip --
 # front and back panels end to end -- so single-sided printing gives a
@@ -302,7 +299,8 @@ def draw_front(c, name, role, fonts):
     # it, because round letters such as O and S dip just under the baseline.
     role_y = h * STICKER_ZONE + 1
     max_w = w - x - 0.15 * inch
-    # Column D is free text, so a long role shrinks to stay on one line.
+    # Column D is free text, so a long role shrinks to stay on one line. A
+    # blank role prints nothing, and the name stays where it would be anyway.
     role = role.upper()
     role_pt = min(ROLE_PT, ROLE_PT * max_w
                   / max(pdfmetrics.stringWidth(role, regular, ROLE_PT), 1))
@@ -483,22 +481,20 @@ def write_badge_pdf(entries, path):
     return pages
 
 
-def fill_roles(entries, label):
-    """Tidy each entry's role; blank becomes DEFAULT_ROLE.
+def tidy_roles(entries, label):
+    """Collapse stray spaces from a pasted roster in each entry's role.
 
     `entries` is [(badge_id, name, role)]. Roles are free text, so nothing is
-    rejected -- stray spaces from a pasted roster are collapsed.
+    rejected, and a blank role leaves that line of the badge empty.
     """
-    filled, blank = [], 0
+    tidied, blank = [], 0
     for badge_id, name, role in entries:
         role = " ".join(role.split())
-        if not role:
-            blank += 1
-            role = DEFAULT_ROLE
-        filled.append((badge_id, name, role))
+        blank += not role
+        tidied.append((badge_id, name, role))
     if blank:
-        print(f"  {blank} with no role in {label} -- printing them as {DEFAULT_ROLE}.")
-    return filled
+        print(f"  {blank} with no role in {label} -- their badges show just the name.")
+    return tidied
 
 
 def read_roster(worksheet):
@@ -575,7 +571,7 @@ def main():
     if args.sample:
         out_dir.mkdir(exist_ok=True)
         path = out_dir / "sample_badges.pdf"
-        pages = write_badge_pdf(fill_roles(SAMPLE_BADGES, "the samples"), path)
+        pages = write_badge_pdf(tidy_roles(SAMPLE_BADGES, "the samples"), path)
         print(f"Wrote {len(SAMPLE_BADGES)} sample badges on {pages} pages to {path}.")
         return
 
@@ -583,7 +579,7 @@ def main():
         csv_path = Path(args.from_csv) if args.from_csv else out_dir / "_roster.csv"
         if not csv_path.exists():
             sys.exit(f"No roster CSV at {csv_path} -- run once with sheet access first.")
-        entries = fill_roles(read_roster_csv(csv_path), csv_path)
+        entries = tidy_roles(read_roster_csv(csv_path), csv_path)
         out_dir.mkdir(exist_ok=True)
         pages = write_badge_pdf(entries, out_dir / "badges.pdf")
         print(f"Wrote {len(entries)} badges on {pages} pages to {out_dir}/badges.pdf "
@@ -612,7 +608,7 @@ def main():
     if len(taken) != len(existing):
         sys.exit("Duplicate badge IDs in column C -- resolve them before running.")
 
-    roles = fill_roles([(e[3], e[1], e[4]) for e in roster], "column D")
+    roles = tidy_roles([(e[3], e[1], e[4]) for e in roster], "column D")
     role_by_row = {e[0]: role for e, (_, _, role) in zip(roster, roles)}
 
     missing = [entry for entry in roster if not entry[3]]
