@@ -36,7 +36,8 @@ of `code.py`. See [LED status strip](#led-status-strip).
 | Path | What it is |
 | --- | --- |
 | [code.py](code.py) | The entire kiosk program — one file, one `while True` loop. Runs on the Pi. |
-| [generate_badges.py](generate_badges.py) | Mints badge IDs into the roster sheet and renders printable PNGs into a local, gitignored `badges/`. Run on any machine with the service-account key. `--test` regenerates `test_badges/` instead, with no key needed. |
+| [generate_badges.py](generate_badges.py) | Mints badge IDs into the roster sheet and renders PNGs plus a print-ready fold-over badge PDF into a local, gitignored `badges/`. Run on any machine with the service-account key (`--creds PATH` off the Pi). `--from-csv` and `--sample` lay out the PDF with no key; `--test` regenerates `test_badges/`. |
+| [fonts/](fonts) | Lexend, the team font, in bold and regular, used for every badge. Bundled under the SIL Open Font License ([fonts/OFL.txt](fonts/OFL.txt)) so badges render the same on any machine with no font install. |
 | [test_badges/](test_badges) | Three committed badges — accept, accept-and-log, reject — for checking the kiosk end to end without touching the roster. |
 | [Use instructions](Use%20instructions) | Step-by-step operating procedure for starting and stopping the kiosk at a build session. |
 | [hardware_tests/](hardware_tests) | One small script per part — LCD, buzzer, LED strip, camera, plus a live camera preview for aiming. Run one when a part misbehaves, to separate a wiring fault from a code fault. |
@@ -185,7 +186,10 @@ For `rpi_ws281x`, prefer `sudo apt install python3-rpi-ws281x` — Bookworm bloc
 system-wide `pip`, and the kiosk runs against system packages.
 
 Badge generator ([generate_badges.py](generate_badges.py), runs anywhere):
-`gspread` · `google-auth` · `qrcode` · `Pillow`
+`gspread` · `google-auth` · `qrcode` · `Pillow` · `reportlab`
+
+Current `reportlab` needs Python 3.10+. On an older Python (macOS's built-in
+`python3` is 3.9), install `'reportlab<4.3'`.
 
 ## Operating it
 
@@ -207,14 +211,17 @@ do and what a failure points to.
 ## Roster and badges
 
 The roster lives in the `master list of names` worksheet and never enters this
-repo. Three columns, and both scripts depend on this layout:
+repo. Both scripts depend on this layout:
 
-| A | B | C |
-| --- | --- | --- |
-| Name | Title/subteam | Badge ID |
+| A | B | C | D |
+| --- | --- | --- | --- |
+| Name | Title/subteam | Badge ID | Role |
 
 Column C is filled in by [generate_badges.py](generate_badges.py). Existing IDs
-are left alone, so badges printed in an earlier season keep working.
+are left alone, so badges printed in an earlier season keep working. Column D is
+`Student`, `Lead`, `Mentor`, or `Faculty` (any case) and is only printed on the
+badge, under the name; blank prints as Student, and anything else stops the
+script before it writes to the sheet. The kiosk ignores column D.
 
 To print badges:
 
@@ -222,10 +229,33 @@ To print badges:
 python3 generate_badges.py --dry-run
 ```
 
-then drop `--dry-run` to mint IDs and render PNGs into `badges/`. Each PNG shows
-the QR code above the person's name, subteam, and ID, so badges can be sorted
-and handed out. `badges/` and its `_roster.csv` are gitignored — they contain
-names and stay local. Regenerate rather than archiving them.
+then drop `--dry-run` to mint IDs and write into `badges/`. Off the Pi, point
+it at your copy of the key with `--creds path/to/service_account.json`.
+
+- `badges.pdf` — the badges to print: 3.5" × 2.25" fold-over badges, three per
+  US Letter page, all black on white. Print single-sided in black and white at
+  100% / Actual size on blank cardstock
+  (the 1-inch bar in the footer checks the scaling), cut on the crop marks, and
+  fold on the dashed line. The front follows last year's design, set in
+  Lexend: the name in bold caps at top left, auto-shrunk to fit, with the role
+  under it in smaller caps. Everything sits in the top third — the bottom two-thirds stay
+  blank for skill-badge stickers. The back shows the QR code and ID. Front and
+  back print side by side and fold together like a greeting card. The name
+  runs close to the top edge, so use a badge holder or clip rather than a slot
+  punch.
+- One PNG per person — the QR code above the name, subteam, and ID.
+- `_roster.csv` — badge ID, name, subteam, and role.
+  `python3 generate_badges.py --from-csv` rebuilds `badges.pdf` from it with no
+  sheet access, for a reprint or after a layout change.
+
+`python3 generate_badges.py --sample` writes `badges/sample_badges.pdf` from
+made-up names, for checking a layout change before printing real badges. Badge
+size, fold edge (`FOLD_EDGE = "top"` stacks the panels and prints the back
+upside down, but fits only one 3.5" × 2.25" badge per page), text sizes, and
+the sticker area are constants at the top of the script.
+
+`badges/` is gitignored — everything in it contains names and stays local.
+Regenerate rather than archiving it.
 
 IDs look like `1076-A7F3`, using an alphabet with no `0`, `1`, `I`, `L`, `O`, or
 `U` so they can be read aloud without ambiguity when debugging a bad badge.

@@ -58,6 +58,7 @@ print("Connected to sheet")
 
 # Badges encode an opaque ID (1076-A7F3), not a name. Column layout of the
 # roster sheet must match generate_badges.py: A name, B subteam, C badge ID.
+# Column D (role) only affects printed badges and isn't read here.
 COL_NAME = 0
 COL_SUBTEAM = 1
 COL_ID = 2
