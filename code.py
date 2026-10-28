@@ -48,12 +48,16 @@ lcd = CharLCD(numbering_mode=GPIO.BOARD,
               pins_data=[16,11,12,15])
 print("LCD ready")
 
-scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+# The sheet is opened by ID (from its URL, between /d/ and /edit), so the
+# spreadsheets scope is enough -- no Drive access needed to look it up by name.
+SPREADSHEET_ID = "16D6Pkm7vp8U_9SqY9FmqPHRO8bcyeU0PoaMDQ_4Jv_Y"
+scopes = ["https://www.googleapis.com/auth/spreadsheets"]
 creds = Credentials.from_service_account_file("/home/pihirobotics/QR_reader/service_account.json", scopes=scopes)
 client = gspread.authorize(creds)
-sheet = client.open("PiHi samurai NEW attendance sheet QR test 61").worksheet("login logs")
+spreadsheet = client.open_by_key(SPREADSHEET_ID)
+sheet = spreadsheet.worksheet("login logs")
 
-master_sheet = client.open("PiHi samurai NEW attendance sheet QR test 61").worksheet("master list of names")
+master_sheet = spreadsheet.worksheet("master list of names")
 print("Connected to sheet")
 
 # Badges encode an opaque ID (1076-A7F3), not a name. Column layout of the

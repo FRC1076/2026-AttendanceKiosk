@@ -10,9 +10,8 @@ The roster worksheet is expected to have four columns:
     A: Name        B: Title/subteam        C: Badge ID        D: Role
 
 Column C is filled in by this script. Rows that already have an ID keep it, so
-badges printed in an earlier season stay valid. Column D is one of Student,
-Lead, Mentor, or Faculty and is only printed on the badge, under the name; a
-blank D prints as Student.
+badges printed in an earlier season stay valid. Column D is free text, printed
+as typed under the name; a blank D prints as Student. Column B may be blank.
 
 Output lands in badges/, which is gitignored: one PNG per person, _roster.csv,
 and badges.pdf -- fold-over badges laid out on US Letter for single-sided
@@ -53,10 +52,12 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 CREDS_PATH = "/home/pihirobotics/QR_reader/service_account.json"
-SPREADSHEET = "PiHi samurai NEW attendance sheet QR test 61"
+# From the sheet's URL, between /d/ and /edit. Must match code.py.
+SPREADSHEET_ID = "16D6Pkm7vp8U_9SqY9FmqPHRO8bcyeU0PoaMDQ_4Jv_Y"
 ROSTER_WORKSHEET = "master list of names"
 
 # Writing badge IDs back to column C needs the read/write spreadsheets scope.
+# Opening by ID means no Drive scope is needed.
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # 1-indexed to match gspread's update_cell.
@@ -82,19 +83,20 @@ TEST_BADGES = [
 ]
 TEST_DIR = "test_badges"
 
-# Made-up people for --sample: every role, and the short, long, hyphenated, and
-# accented names the auto-shrink has to handle. The kiosk rejects the IDs.
+# Made-up people for --sample: the short, long, hyphenated, and accented names
+# the auto-shrink has to handle, and a role long enough to shrink too. The kiosk
+# rejects the IDs.
 SAMPLE_BADGES = [
     ("SAMPLE-01", "Avery Example", "Student"),
-    ("SAMPLE-02", "Li Wu", "Lead"),
-    ("SAMPLE-03", "Bartholomew Montgomery-Fitzgerald", "Student"),
+    ("SAMPLE-02", "Li Wu", "Mechanical Lead"),
+    ("SAMPLE-03", "Bartholomew Montgomery-Fitzgerald", ""),
     ("SAMPLE-04", "José Ñúñez", "Mentor"),
-    ("SAMPLE-05", "Sam Placeholder", "Faculty"),
-    ("SAMPLE-06", "Alexandria Konstantinopoulou-Vanderbilt", "Lead"),
+    ("SAMPLE-05", "Sam Placeholder", "Faculty Mentor"),
+    ("SAMPLE-06", "Alexandria Konstantinopoulou-Vanderbilt",
+     "Chief Technical Director and Engineering Captain"),
 ]
 
-# The roles column D may hold, as printed under the name.
-ROLES = ("Student", "Lead", "Mentor", "Faculty")
+# Printed for anyone whose column D is blank.
 DEFAULT_ROLE = "Student"
 
 # Fold-over badge sheet. Sizes are in inches. Each badge prints as one strip --
@@ -299,15 +301,22 @@ def draw_front(c, name, role, fonts):
     # Everything below h * STICKER_ZONE stays blank. The role sits a point above
     # it, because round letters such as O and S dip just under the baseline.
     role_y = h * STICKER_ZONE + 1
+    max_w = w - x - 0.15 * inch
+    # Column D is free text, so a long role shrinks to stay on one line.
+    role = role.upper()
+    role_pt = min(ROLE_PT, ROLE_PT * max_w
+                  / max(pdfmetrics.stringWidth(role, regular, ROLE_PT), 1))
     c.setFillColor("#000000")
-    c.setFont(regular, ROLE_PT)
-    c.drawString(x, role_y, role.upper())
+    c.setFont(regular, role_pt)
+    c.drawString(x, role_y, role)
 
     # The name sits above the role, bottom line first, and may grow up to the
     # top margin.
     cap_h = pdfmetrics.getFont(regular).face.capHeight / 1000 * ROLE_PT
     baseline = role_y + cap_h + NAME_GAP * inch
-    lines, size = layout_name(name.upper(), bold, w - x - 0.15 * inch,
+    # Collapse stray double spaces from pasted rosters.
+    name = " ".join(name.split())
+    lines, size = layout_name(name.upper(), bold, max_w,
                               h - TOP_MARGIN * inch - baseline)
     if size < NAME_MIN_PT:
         print(f"  warning: {name!r} only fits at {size:.1f}pt")
@@ -474,29 +483,22 @@ def write_badge_pdf(entries, path):
     return pages
 
 
-def check_roles(entries, label):
-    """Canonicalise each entry's role; blank becomes DEFAULT_ROLE.
+def fill_roles(entries, label):
+    """Tidy each entry's role; blank becomes DEFAULT_ROLE.
 
-    `entries` is [(badge_id, name, role)]. Exits on a role not in ROLES.
+    `entries` is [(badge_id, name, role)]. Roles are free text, so nothing is
+    rejected -- stray spaces from a pasted roster are collapsed.
     """
-    lookup = {role.lower(): role for role in ROLES}
-    checked, blank, bad = [], 0, []
+    filled, blank = [], 0
     for badge_id, name, role in entries:
+        role = " ".join(role.split())
         if not role:
             blank += 1
             role = DEFAULT_ROLE
-        elif role.lower() in lookup:
-            role = lookup[role.lower()]
-        else:
-            bad.append(f"{name}: {role!r}")
-            continue
-        checked.append((badge_id, name, role))
-    if bad:
-        sys.exit(f"Unknown roles in {label} (expected {', '.join(ROLES)}):\n  "
-                 + "\n  ".join(bad))
+        filled.append((badge_id, name, role))
     if blank:
         print(f"  {blank} with no role in {label} -- printing them as {DEFAULT_ROLE}.")
-    return checked
+    return filled
 
 
 def read_roster(worksheet):
@@ -573,7 +575,7 @@ def main():
     if args.sample:
         out_dir.mkdir(exist_ok=True)
         path = out_dir / "sample_badges.pdf"
-        pages = write_badge_pdf(SAMPLE_BADGES, path)
+        pages = write_badge_pdf(fill_roles(SAMPLE_BADGES, "the samples"), path)
         print(f"Wrote {len(SAMPLE_BADGES)} sample badges on {pages} pages to {path}.")
         return
 
@@ -581,7 +583,7 @@ def main():
         csv_path = Path(args.from_csv) if args.from_csv else out_dir / "_roster.csv"
         if not csv_path.exists():
             sys.exit(f"No roster CSV at {csv_path} -- run once with sheet access first.")
-        entries = check_roles(read_roster_csv(csv_path), csv_path)
+        entries = fill_roles(read_roster_csv(csv_path), csv_path)
         out_dir.mkdir(exist_ok=True)
         pages = write_badge_pdf(entries, out_dir / "badges.pdf")
         print(f"Wrote {len(entries)} badges on {pages} pages to {out_dir}/badges.pdf "
@@ -599,7 +601,7 @@ def main():
 
     creds = Credentials.from_service_account_file(args.creds, scopes=SCOPES)
     client = gspread.authorize(creds)
-    worksheet = client.open(SPREADSHEET).worksheet(ROSTER_WORKSHEET)
+    worksheet = client.open_by_key(SPREADSHEET_ID).worksheet(ROSTER_WORKSHEET)
 
     roster = read_roster(worksheet)
     if not roster:
@@ -610,8 +612,7 @@ def main():
     if len(taken) != len(existing):
         sys.exit("Duplicate badge IDs in column C -- resolve them before running.")
 
-    # Catch a mistyped role before any IDs are written to the sheet.
-    roles = check_roles([(e[3], e[1], e[4]) for e in roster], "column D")
+    roles = fill_roles([(e[3], e[1], e[4]) for e in roster], "column D")
     role_by_row = {e[0]: role for e, (_, _, role) in zip(roster, roles)}
 
     missing = [entry for entry in roster if not entry[3]]

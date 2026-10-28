@@ -219,9 +219,10 @@ repo. Both scripts depend on this layout:
 
 Column C is filled in by [generate_badges.py](generate_badges.py). Existing IDs
 are left alone, so badges printed in an earlier season keep working. Column D is
-`Student`, `Lead`, `Mentor`, or `Faculty` (any case) and is only printed on the
-badge, under the name; blank prints as Student, and anything else stops the
-script before it writes to the sheet. The kiosk ignores column D.
+free text — `Mentor`, `Assistant Coach`, `Mechanical Lead` — and is only
+printed on the badge, under the name, shrinking if it's too long for one line;
+blank prints as Student. The kiosk ignores column D. Column B may be blank: the
+badge PNG and the LCD then show just the name.
 
 To print badges:
 
@@ -273,16 +274,38 @@ The same three values are hardcoded at the top of both [code.py](code.py) and
 - The Google service-account key path,
   `/home/pihirobotics/QR_reader/service_account.json` (the key itself is on the
   Pi, never in this repo — `*.json` is gitignored). Google names a downloaded
-  key after the project and key ID, e.g. `fifth-chalice-487115-u5-….json`;
-  rename it to `service_account.json` when installing it. The Pi's older copy
-  of `code.py` pointed at the original name, so **rename the key on the Pi when
-  deploying this version**, or the kiosk stops at startup with
-  `FileNotFoundError`.
-- The spreadsheet name, `PiHi samurai NEW attendance sheet QR test 61`
+  key after the project and key ID; rename it to `service_account.json` when
+  installing it, or the kiosk stops at startup with `FileNotFoundError`.
+- The spreadsheet ID, `SPREADSHEET_ID` — the part of the sheet's URL between
+  `/d/` and `/edit`. It currently points at **1076 PiHi Samurai Attendance
+  Kiosk**, owned by Mr. Van Loo's school account. Opening by ID rather than by
+  name means renaming or moving the sheet doesn't break anything.
 - The worksheet names, `login logs` and `master list of names`
 
-The generator needs the read/write `spreadsheets` scope to write column C. The
-kiosk only reads, but currently requests the same broad scopes as before.
+Both scripts request only the read/write `spreadsheets` scope: the kiosk
+appends to `login logs`, and the generator writes badge IDs into column C.
+
+### Setting up the sheet and key
+
+The 2026 sheet and key belonged to a graduated student's account, so for the
+2026–27 season both were replaced with ones owned by staff. To do it again:
+
+1. **The sheet.** Two tabs: `master list of names` with a header row `Name,
+   Subteam, Badge ID, Role`, and `login logs` with `Name, Subteam, Date,
+   Time`. Put its ID in both scripts.
+2. **A Google Cloud project**, at console.cloud.google.com, signed in with a
+   staff account. Enable the **Google Sheets API** in it.
+3. **A service account** in that project (IAM & Admin → Service Accounts →
+   Create). It needs no project roles.
+4. **A JSON key** for it (the service account → Keys → Add key → JSON). If the
+   district blocks key creation, ask district IT. Install it on the Pi at the
+   path above, and keep any copy for running the generator elsewhere outside
+   this repo.
+5. **Share the sheet** with the service account's email
+   (`…@<project>.iam.gserviceaccount.com`) as an Editor.
+
+To retire a key, delete it under the service account's Keys tab, or remove the
+service account from the sheet's sharing.
 
 [code.py](code.py) also has `ALLOW_LEGACY_NAME_BADGES`, default `False`. Set it
 `True` only while old `Name,Subteam` badges are still in circulation, and turn
