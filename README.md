@@ -235,7 +235,12 @@ python3 generate_badges.py --dry-run
 ```
 
 then drop `--dry-run` to mint IDs and write into `badges/`. Off the Pi, point
-it at your copy of the key with `--creds path/to/service_account.json`.
+it at your copy of the key with `--creds path/to/service_account.json`. The
+dry run lists who would get a new ID and who would be reprinted.
+
+To add people or change roles later, edit the sheet — new rows at the bottom
+with column C blank, role changes in column D only — and run it again. Print
+`changed_badges.pdf`, then restart the kiosk so it loads the new IDs.
 
 - `badges.pdf` — the badges to print: 3.5" × 2.25" fold-over badges, three per
   US Letter page, all black on white. Print single-sided in black and white at
@@ -249,6 +254,12 @@ it at your copy of the key with `--creds path/to/service_account.json`.
   runs close to the top edge, so use a badge holder or clip rather than a slot
   punch.
 - One PNG per person — the QR code above the name, subteam, and ID.
+- `changed_badges.pdf` — just the badges that changed since the previous run:
+  new people, and anyone whose name or role now prints differently (case and
+  spacing alone don't count). Laid out like `badges.pdf`. The comparison is
+  against the `_roster.csv` that run left behind, so print it before running
+  again; with no earlier `_roster.csv` there's nothing to compare, and you print
+  `badges.pdf`.
 - `_roster.csv` — badge ID, name, subteam, and role.
   `python3 generate_badges.py --from-csv` rebuilds `badges.pdf` from it with no
   sheet access, for a reprint or after a layout change.

@@ -20,6 +20,11 @@ dashed line: the front shows the name and role, the back the QR code. All of it
 carries names, which makes it student data -- it stays local and is never
 committed.
 
+Each run also compares against the _roster.csv the previous run left behind and
+writes changed_badges.pdf with only the new people and anyone whose name or role
+now prints differently -- the badges to hand out after a roster update. Print it
+before running again: the next run compares against this one.
+
 --from-csv re-lays out badges.pdf from badges/_roster.csv with no sheet access,
 for reprinting or after a layout change. --sample lays out made-up people, for
 checking the layout without touching real data.
@@ -28,7 +33,7 @@ checking the layout without touching real data.
 data, need no sheet access, and are committed so anyone can check the kiosk.
 
 Usage:
-    python3 generate_badges.py              # mint missing IDs, write PNGs + PDF
+    python3 generate_badges.py              # mint missing IDs, write PNGs + PDFs
     python3 generate_badges.py --dry-run    # report what would change
     python3 generate_badges.py --creds KEY  # use a key file other than the Pi's
     python3 generate_badges.py --from-csv   # rebuild badges.pdf from _roster.csv
@@ -528,6 +533,24 @@ def read_roster_csv(path):
         ]
 
 
+def changed_badges(entries, previous):
+    """Return the entries whose printed badge differs from the last run.
+
+    `entries` is [(badge_id, name, role)]; `previous` maps badge_id to
+    (name, role) from that run's _roster.csv. A badge counts as changed if its
+    ID is new or its name or role would print differently. Case and spacing
+    alone don't count, since the front prints both in caps with single spaces.
+    """
+    def front(name, role):
+        return " ".join(name.split()).upper(), " ".join(role.split()).upper()
+
+    return [
+        (badge_id, name, role)
+        for badge_id, name, role in entries
+        if badge_id not in previous or front(*previous[badge_id]) != front(name, role)
+    ]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default="badges", help="output directory")
@@ -614,9 +637,27 @@ def main():
     missing = [entry for entry in roster if not entry[3]]
     print(f"{len(roster)} people, {len(existing)} with IDs, {len(missing)} to mint.")
 
+    # The last run's _roster.csv says what's already printed, so
+    # changed_badges.pdf can hold just the new and changed badges. Read it
+    # before this run overwrites it.
+    roster_csv = out_dir / "_roster.csv"
+    previous = None
+    if roster_csv.exists():
+        previous = {badge_id: (name, role)
+                    for badge_id, name, role in read_roster_csv(roster_csv)}
+
     if args.dry_run:
         for _, name, _, _, _ in missing:
             print(f"  would mint an ID for {name}")
+        if previous is not None:
+            changed = changed_badges(
+                [(e[3], e[1], role_by_row[e[0]]) for e in existing], previous)
+            for badge_id, name, _ in changed:
+                reason = ("name or role changed" if badge_id in previous
+                          else "not in the last run")
+                print(f"  would reprint {name} ({reason})")
+            print(f"Would put {len(missing) + len(changed)} new or changed badges "
+                  "in changed_badges.pdf.")
         print(f"Would write {len(roster)} badges and badges.pdf to {args.out}/.")
         return
 
@@ -633,18 +674,33 @@ def main():
     for _, name, subteam, badge_id, _ in final:
         make_badge(badge_id, name, subteam, out_dir)
 
-    with open(out_dir / "_roster.csv", "w", newline="") as handle:
+    with open(roster_csv, "w", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(["badge_id", "name", "subteam", "role"])
         for row_number, name, subteam, badge_id, _ in final:
             writer.writerow([badge_id, name, subteam, role_by_row[row_number]])
 
-    pages = write_badge_pdf(
-        [(badge_id, name, role_by_row[row]) for row, name, _, badge_id, _ in final],
-        out_dir / "badges.pdf",
-    )
+    entries = [(badge_id, name, role_by_row[row])
+               for row, name, _, badge_id, _ in final]
+    pages = write_badge_pdf(entries, out_dir / "badges.pdf")
     print(f"Wrote {len(final)} badges and badges.pdf ({pages} pages) to {out_dir}/ "
           "(local only -- do not commit).")
+
+    # Remove the last batch first, so an old changed_badges.pdf is never
+    # mistaken for this run's.
+    changed_path = out_dir / "changed_badges.pdf"
+    changed_path.unlink(missing_ok=True)
+    if previous is None:
+        print("No earlier _roster.csv to compare with, so no changed_badges.pdf -- "
+              "print badges.pdf.")
+        return
+    changed = changed_badges(entries, previous)
+    if changed:
+        pages = write_badge_pdf(changed, changed_path)
+        print(f"Wrote {len(changed)} new or changed badges to changed_badges.pdf "
+              f"({pages} page{'s' if pages != 1 else ''}).")
+    else:
+        print("No new or changed badges since the last run, so no changed_badges.pdf.")
 
 
 if __name__ == "__main__":
