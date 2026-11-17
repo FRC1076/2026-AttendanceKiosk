@@ -1,0 +1,9 @@
+# Dependencies for generate_badges.py. The kiosk (code.py) runs on the Pi
+# against system packages instead -- see README "Software dependencies".
+qrcode
+Pillow
+reportlab; python_version >= "3.10"
+reportlab<4.3; python_version < "3.10"
+# Only the sheet modes need these; --from-csv, --sample and --test don't.
+gspread
+google-auth
