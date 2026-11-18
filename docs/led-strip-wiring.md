@@ -255,18 +255,9 @@ SPI stays disabled — LCD RS is on GPIO10.
 
 ### Install
 
-Bookworm blocks system-wide `pip`, and the kiosk runs against system packages
-(`picamera2` is installed that way), so prefer apt:
-
-```bash
-sudo apt install python3-rpi-ws281x
-```
-
-If that package is unavailable on the installed OS:
-
-```bash
-sudo pip3 install --break-system-packages rpi_ws281x
-```
+`rpi_ws281x` is in [requirements.txt](../requirements.txt) with the rest of the
+kiosk's packages. Install them as described in the README's
+[Software dependencies](../README.md#software-dependencies).
 
 ### Permissions
 

@@ -1,0 +1,28 @@
+# Kiosk (code.py and hardware_tests/) -- Raspberry Pi only.
+# The badge generator has its own list: requirements-badges.txt.
+#
+# Two steps, in this order. See docs/pi-setup.md for the full walkthrough.
+#
+# 1. From apt. These are tied to the Pi's own libraries, so pip can't supply
+#    them. Most come preinstalled on Raspberry Pi OS; re-running is harmless.
+#
+#      sudo apt install python3-picamera2 python3-opencv python3-gpiozero python3-rpi.gpio libzbar0
+#
+#    Do NOT pip install picamera2, opencv-python, or numpy. pip's numpy
+#    replaces the one apt's picamera2 was built against, and the camera then
+#    fails on import with "numpy.dtype size changed".
+#
+# 2. From pip, into the system Python, because the kiosk runs as
+#    `sudo -E python3`:
+#
+#      sudo pip3 install --break-system-packages -r requirements.txt
+#
+#    Bookworm requires that flag to let pip add to the system Python. Nothing
+#    below is packaged in apt, and none of it pulls in numpy.
+
+gspread>=5.0          # Google Sheets: roster and login log
+google-auth           # service-account key
+pyzbar                # QR decoding; needs libzbar0 from apt
+RPLCD                 # 16x2 character LCD
+keyboard              # the q-to-quit check; needs root
+rpi_ws281x            # WS2812B LED strip; needs root

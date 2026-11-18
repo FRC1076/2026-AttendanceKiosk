@@ -37,6 +37,8 @@ of `code.py`. See [LED status strip](#led-status-strip).
 | --- | --- |
 | [code.py](code.py) | The entire kiosk program — one file, one `while True` loop. Runs on the Pi. |
 | [generate_badges.py](generate_badges.py) | Mints badge IDs into the roster sheet and renders PNGs plus a print-ready fold-over badge PDF into a local, gitignored `badges/`. Run on any machine with the service-account key (`--creds PATH` off the Pi). `--from-csv` and `--sample` lay out the PDF with no key; `--test` regenerates `test_badges/`. |
+| [requirements.txt](requirements.txt) | Python packages for the kiosk on the Pi, with the `apt` packages that must come first. |
+| [requirements-badges.txt](requirements-badges.txt) | Python packages for the badge generator on a laptop. |
 | [fonts/](fonts) | Lexend, the team font, in bold and regular, used for every badge. Bundled under the SIL Open Font License ([fonts/OFL.txt](fonts/OFL.txt)) so badges render the same on any machine with no font install. |
 | [test_badges/](test_badges) | Three committed badges — accept, accept-and-log, reject — for checking the kiosk end to end without touching the roster. |
 | [Use instructions](Use%20instructions) | Step-by-step operating procedure for starting and stopping the kiosk at a build session. |
@@ -179,18 +181,37 @@ Eliminating these is the first item on the improvement list.
 
 ## Software dependencies
 
-Kiosk ([code.py](code.py), runs on the Pi): `opencv-python` · `pyzbar` ·
-`gspread` · `google-auth` · `picamera2` · `RPLCD` · `RPi.GPIO` · `gpiozero` ·
-`keyboard` · `rpi_ws281x`
+**Kiosk** ([code.py](code.py) and [hardware_tests/](hardware_tests), on the Pi)
+— listed in [requirements.txt](requirements.txt). It installs in two steps,
+because part of the stack is tied to the Pi's own camera libraries and has to
+come from `apt`. Run these from the clone on the Pi (`cd ~/2026-AttendanceKiosk`):
 
-For `rpi_ws281x`, prefer `sudo apt install python3-rpi-ws281x` — Bookworm blocks
-system-wide `pip`, and the kiosk runs against system packages.
+```bash
+sudo apt install python3-picamera2 python3-opencv python3-gpiozero python3-rpi.gpio libzbar0
+```
 
-Badge generator ([generate_badges.py](generate_badges.py), runs anywhere):
-`gspread` · `google-auth` · `qrcode` · `Pillow` · `reportlab`
+```bash
+sudo pip3 install --break-system-packages -r requirements.txt
+```
 
-Current `reportlab` needs Python 3.10+. On an older Python (macOS's built-in
-`python3` is 3.9), install `'reportlab<4.3'`.
+- **Order matters, and so does `sudo`.** The kiosk runs as `sudo -E python3`, so
+  the pip packages go into the system Python. `--break-system-packages` is how
+  Bookworm allows that. Nothing in the file is also packaged in apt.
+- **Never `pip install` picamera2, opencv-python, or numpy on the Pi.** pip's
+  numpy replaces the one apt's picamera2 was built against, and the camera
+  stops working (`numpy.dtype size changed`). Nothing in
+  [requirements.txt](requirements.txt) pulls numpy in.
+
+**Badge generator** ([generate_badges.py](generate_badges.py), on any laptop) —
+listed in [requirements-badges.txt](requirements-badges.txt):
+
+```bash
+python3 -m pip install -r requirements-badges.txt
+```
+
+Current `reportlab` needs Python 3.10+. The file picks `reportlab<4.3` on an
+older Python (macOS's built-in `python3` is 3.9), so the same command works on
+either.
 
 ## Operating it
 

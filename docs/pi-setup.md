@@ -41,7 +41,21 @@ sudo apt install git
 git clone https://github.com/FRC1076/2026-AttendanceKiosk.git ~/2026-AttendanceKiosk
 ```
 
-**3. Move the Pi's old files aside.** `~/QR_reader` should end up holding only
+**3. Install the packages.** A Pi that already ran the old kiosk has most of
+these; running both commands anyway is harmless. The second one installs from
+[requirements.txt](../requirements.txt), and the README's
+[Software dependencies](../README.md#software-dependencies) explains why it
+takes two steps.
+
+```bash
+sudo apt install python3-picamera2 python3-opencv python3-gpiozero python3-rpi.gpio libzbar0
+```
+
+```bash
+sudo pip3 install --break-system-packages -r ~/2026-AttendanceKiosk/requirements.txt
+```
+
+**4. Move the Pi's old files aside.** `~/QR_reader` should end up holding only
 the key, so the old `~/QR_reader/code.py` can't be run by habit. Look first,
 then move the old code.py and old key into a backup folder.
 
@@ -61,13 +75,13 @@ Move anything else the old setup used, such as `ws281test.py`, into `old/` as
 well — the repo's versions replace it (see
 [led-strip-wiring.md](led-strip-wiring.md#dma-channel)).
 
-**4. Install the key**, following [Installing a new key](#installing-a-new-key)
+**5. Install the key**, following [Installing a new key](#installing-a-new-key)
 from step 2.
 
-**5. Start the kiosk and test it**, as in
+**6. Start the kiosk and test it**, as in
 [Starting and testing](#starting-and-testing).
 
-**6. Clean up.** After a few good sessions, delete the backup:
+**7. Clean up.** After a few good sessions, delete the backup:
 
 ```bash
 rm -r ~/QR_reader/old
@@ -102,6 +116,12 @@ git pull
 
 ```bash
 git log -1 --oneline
+```
+
+If the pull listed `requirements.txt` among the changed files, reinstall:
+
+```bash
+sudo pip3 install --break-system-packages -r ~/2026-AttendanceKiosk/requirements.txt
 ```
 
 **3. Start the kiosk and test it**, as in
@@ -220,6 +240,8 @@ sudo -E python3 -u ~/QR_reader/code.py
 | --- | --- |
 | `Could not resolve host: github.com` | The Pi is offline. It needs the network for the sheet too. |
 | `git pull` refuses: local changes would be overwritten | Someone edited on the Pi. See [Updating the code](#updating-the-code), step 1. |
+| `ModuleNotFoundError` | A package is missing. Rerun both install commands in [First time](#first-time-moving-the-pi-to-the-clone), step 3 — with `sudo` on the pip one, or the kiosk (which runs as root) won't see the packages. |
+| `numpy.dtype size changed` | Someone pip-installed numpy, opencv-python, or picamera2. `sudo pip3 uninstall --break-system-packages numpy opencv-python picamera2`, then rerun the apt command. |
 | `FileNotFoundError` | The key isn't at `~/QR_reader/service_account.json`. Check the name with `ls ~/QR_reader`. |
 | `No such file or directory: …/QR_reader/code.py` | The old run command. Start it from `~/2026-AttendanceKiosk/code.py`. |
 | `invalid_grant` or `Invalid JWT` | The Pi's clock is wrong. Connect it to the network so it sets the time, then try again. |

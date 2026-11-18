@@ -1,0 +1,15 @@
+# Badge generator (generate_badges.py) -- any laptop. The kiosk's list is
+# requirements.txt.
+#
+#   python3 -m pip install -r requirements-badges.txt
+#
+# --test needs only qrcode, Pillow, and reportlab; gspread and google-auth are
+# loaded only when the script talks to the roster sheet.
+
+gspread>=5.0
+google-auth
+qrcode
+Pillow>=8.0           # ImageDraw.textlength
+# Current reportlab needs Python 3.10+. macOS's built-in python3 is 3.9.
+reportlab; python_version >= "3.10"
+reportlab<4.3; python_version < "3.10"
